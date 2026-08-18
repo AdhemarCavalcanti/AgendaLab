@@ -39,10 +39,10 @@ export function AdminAprovacoes() {
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
 
-      // 2. Equipamentos pendentes de aprovação
+      // 2. Equipamentos pendentes de aprovação (incluído "motivo")
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, observacao, status, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, inicio, fim, motivo, observacao, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
 
@@ -88,7 +88,7 @@ export function AdminAprovacoes() {
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
-      detalhe: r.observacao ?? undefined,
+      detalhe: r.motivo ? `Motivo: ${r.motivo}` : r.observacao ?? undefined,
     }))
 
     const devolucoesEquip: Solicitacao[] = (resDevolucoes.data ?? []).map((r: any) => ({
@@ -190,12 +190,9 @@ export function AdminAprovacoes() {
       id_adm: meuIdAdm 
     }
     
+    // Agora ambas as tabelas (salas e equipamentos) gravam na coluna 'motivo'
     if (justificativa.trim()) {
-      if (rejeitando.tipo === 'sala') {
-        payload.motivo = justificativa.trim()
-      } else {
-        payload.observacao = justificativa.trim()
-      }
+      payload.motivo = justificativa.trim()
     }
     
     const { error } = await supabase.from(tabela).update(payload).eq('id', Number(rejeitando.id))
