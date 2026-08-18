@@ -29,7 +29,7 @@ export function RecursoAgenda() {
   const { user, role, meuIdUsuario } = useAuth()
   const navigate = useNavigate()
 
-  const [recurso, setRecurso] = useState<Sala | Equipamento | null>(null)
+  const [recurso, setRecurso] = useState<(Sala | Equipamento) & { regras_uso?: string } | null>(null)
   const [ocupacoes, setOcupacoes] = useState<Ocupacao[]>([])
   const [selectedDate, setSelectedDate] = useState(() => proximosDias(1)[0])
   const [loading, setLoading] = useState(true)
@@ -58,7 +58,7 @@ export function RecursoAgenda() {
     if (error || !data) {
       setErro('Recurso não encontrado.')
     } else {
-      setRecurso(data as Sala | Equipamento)
+      setRecurso(data as (Sala | Equipamento) & { regras_uso?: string })
     }
     setLoading(false)
   }
@@ -148,7 +148,7 @@ export function RecursoAgenda() {
       payload.observacao = observacao || null
     } else {
       payload.observacao = observacao || null
-      payload.status_devolucao = 'pendente' // <- Adicionado aqui
+      payload.status_devolucao = 'pendente'
     }
 
     const { error } = await supabase.from(tabela).insert(payload)
@@ -182,7 +182,6 @@ export function RecursoAgenda() {
   const nome = recurso.nome
   const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Quantidade: ${(recurso as Equipamento).quantidade}`
 
-  // Valida indisponibilidade comum e equipamento com quantidade zerada
   const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
   const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
 
@@ -192,7 +191,7 @@ export function RecursoAgenda() {
         ← voltar ao catálogo
       </button>
 
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">{tipo}</p>
           <h1 className="font-display text-3xl font-bold">{nome}</h1>
@@ -200,6 +199,18 @@ export function RecursoAgenda() {
         </div>
         <StatusBadge status={equipamentoSemEstoque ? 'ocupado' : recurso.status} tipo="recurso" />
       </div>
+
+      {/* Regras de Uso - Exibidas antes das regras de agenda/horários */}
+      {recurso.regras_uso && (
+        <div className="mb-8 rounded-lg border border-(--color-border) bg-black/5 p-4">
+          <h3 className="mb-1 font-mono text-xs font-semibold uppercase tracking-wider text-(--color-cyan)">
+            📋 Regras de Uso
+          </h3>
+          <p className="text-sm whitespace-pre-line text-(--color-ink-soft)">
+            {recurso.regras_uso}
+          </p>
+        </div>
+      )}
 
       {indisponivel ? (
         <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-4 text-sm text-(--color-coral)">
@@ -226,8 +237,9 @@ export function RecursoAgenda() {
                 <button
                   key={d.toISOString()}
                   onClick={() => setSelectedDate(d)}
-                  className={`shrink-0 rounded-md border px-3 py-2 text-center font-mono text-xs transition-colors ${ativo ? 'border-(--color-cyan) bg-(--color-cyan) text-white' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-                    }`}
+                  className={`shrink-0 rounded-md border px-3 py-2 text-center font-mono text-xs transition-colors ${
+                    ativo ? 'border-(--color-cyan) bg-(--color-cyan) text-white' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
+                  }`}
                 >
                   <div className="uppercase">{d.toLocaleDateString('pt-BR', { weekday: 'short' })}</div>
                   <div className="text-sm font-semibold">{d.getDate()}</div>
