@@ -33,12 +33,12 @@ export function AdminAprovacoes() {
     const [resSalas, resEquip, resDevolucoes, resListaSalas, resListaEquip] = await Promise.all([
       supabase
         .from('reservas_salas')
-        .select('id, id_sala, inicio, fim, motivo, quantidade_pessoas, status, usuarios(nome)')
+        .select('id, id_sala, inicio, fim, motivo, quantidade_pessoas, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, observacao, status, usuarios(nome)')
+        .select('id, id_equipamento, inicio, fim, observacao, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
       supabase
@@ -62,6 +62,8 @@ export function AdminAprovacoes() {
       tipo: 'sala',
       recursoNome: mapaSalas.get(r.id_sala) ?? `Sala #${r.id_sala}`,
       usuarioNome: r.usuarios?.nome ?? 'Usuário',
+      usuarioEmail: r.usuarios?.email ?? undefined,
+      usuarioMatricula: r.usuarios?.matricula ?? undefined,
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
@@ -73,6 +75,8 @@ export function AdminAprovacoes() {
       tipo: 'equipamento',
       recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
       usuarioNome: r.usuarios?.nome ?? 'Usuário',
+      usuarioEmail: r.usuarios?.email ?? undefined,
+      usuarioMatricula: r.usuarios?.matricula ?? undefined,
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
@@ -225,7 +229,15 @@ export function AdminAprovacoes() {
                     <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-amber)">pendente</span>
                   </div>
                   <p className="font-medium">{item.recursoNome} — solicitado por {item.usuarioNome}</p>
-                  <p className="font-mono text-sm text-(--color-ink-soft)">
+                  
+                  {/* Informações adicionais do usuário */}
+                  <p className="text-xs text-(--color-ink-soft)">
+                    {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
+                    {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
+                    {item.usuarioEmail && <span>E-mail: {item.usuarioEmail}</span>}
+                  </p>
+
+                  <p className="mt-1 font-mono text-sm text-(--color-ink-soft)">
                     {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
