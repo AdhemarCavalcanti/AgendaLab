@@ -65,29 +65,42 @@ export function RecursoAgenda() {
 
   async function carregarOcupacoes() {
     if (!tipo || !id) return
-    const inicioJanela = new Date()
+
+    const inicioJanela = new Date(selectedDate)
+    inicioJanela.setDate(inicioJanela.getDate() - 1)
     inicioJanela.setHours(0, 0, 0, 0)
-    const fimJanela = new Date(inicioJanela)
-    fimJanela.setDate(fimJanela.getDate() + 15)
+
+    const fimJanela = new Date(selectedDate)
+    fimJanela.setDate(fimJanela.getDate() + 2)
+    fimJanela.setHours(23, 59, 59, 999)
 
     const { data, error } = await supabase
       .from(tabela)
       .select('inicio, fim, status, id_usuario')
       .eq(coluna, idNum)
-      .in('status', ['pendente', 'confirmada'])
+      .in('status', ['pendente', 'aprovada'])
       .gte('inicio', inicioJanela.toISOString())
       .lte('inicio', fimJanela.toISOString())
 
     if (!error && data) {
-      setOcupacoes(data.map((o) => ({ inicio: o.inicio, fim: o.fim, status: o.status, mine: o.id_usuario === meuIdUsuario })))
+      setOcupacoes(
+        data.map((o) => ({
+          inicio: o.inicio,
+          fim: o.fim,
+          status: o.status,
+          mine: o.id_usuario === meuIdUsuario,
+        })) as unknown as Ocupacao[]
+      )
     }
   }
 
   useEffect(() => {
     carregarRecurso()
-    carregarOcupacoes()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipo, id])
+
+  useEffect(() => {
+    carregarOcupacoes()
+  }, [tipo, id, selectedDate])
 
   function abrirConfirmacao(inicio: Date, fim: Date) {
     setFormErro(null)
@@ -106,12 +119,11 @@ export function RecursoAgenda() {
     setEnviando(true)
     setFormErro(null)
 
-    // Verificação de conflito no cliente (best-effort; a garantia definitiva deve vir de constraint no banco)
     const { data: conflitos } = await supabase
       .from(tabela)
       .select('id')
       .eq(coluna, idNum)
-      .in('status', ['pendente', 'confirmada'])
+      .in('status', ['pendente', 'aprovada'])
       .lt('inicio', pendingSlot.fim.toISOString())
       .gt('fim', pendingSlot.inicio.toISOString())
 

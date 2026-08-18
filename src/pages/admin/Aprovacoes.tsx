@@ -25,7 +25,6 @@ export function AdminAprovacoes() {
   async function carregar() {
     setLoading(true)
 
-    // Busca solicitações pendentes e os nomes dos recursos em paralelo
     const [resSalas, resEquip, resListaSalas, resListaEquip] = await Promise.all([
       supabase
         .from('reservas_salas')
@@ -41,7 +40,6 @@ export function AdminAprovacoes() {
       supabase.from('equipamentos').select('id_equipamento, nome'),
     ])
 
-    // Mapeia IDs para nomes de salas e equipamentos
     const mapaSalas = new Map<number, string>(
       (resListaSalas.data ?? []).map((s: any) => [s.id_sala, s.nome])
     )
@@ -77,7 +75,6 @@ export function AdminAprovacoes() {
   useEffect(() => {
     carregar()
 
-    // Realtime: avisa visualmente quando novas solicitações pendentes chegam
     const channel = supabase
       .channel('aprovacoes-pendentes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservas_salas' }, () => setNovaSolicitacao(true))
@@ -95,7 +92,6 @@ export function AdminAprovacoes() {
     setProcessando(item.id)
     const tabela = item.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
     
-    // Atualiza status para 'aprovada'
     const { error } = await supabase
       .from(tabela)
       .update({ status: 'aprovada', id_adm: meuIdAdm })
@@ -111,9 +107,19 @@ export function AdminAprovacoes() {
     setProcessando(rejeitando.id)
     const tabela = rejeitando.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
     
-    // Atualiza status para 'rejeitada'
-    const payload: Record<string, unknown> = { status: 'rejeitada', id_adm: meuIdAdm }
-    if (justificativa.trim()) payload.observacao = `Rejeitada: ${justificativa.trim()}`
+    const payload: Record<string, unknown> = { 
+      status: 'cancelada', 
+      id_adm: meuIdAdm 
+    }
+    
+    // Grava apenas o texto digitado pelo administrador
+    if (justificativa.trim()) {
+      if (rejeitando.tipo === 'sala') {
+        payload.motivo = justificativa.trim()
+      } else {
+        payload.observacao = justificativa.trim()
+      }
+    }
     
     const { error } = await supabase.from(tabela).update(payload).eq('id', rejeitando.id)
     setProcessando(null)

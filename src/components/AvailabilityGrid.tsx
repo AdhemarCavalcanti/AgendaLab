@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 
 export interface Ocupacao {
-  inicio: string
-  fim: string
+  inicio: string | Date
+  fim: string | Date
   status: string
   mine?: boolean
 }
@@ -36,17 +36,22 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
 
   const now = new Date()
 
-  function statusOfHour(hour: number): { kind: 'passado' | 'livre' | 'pendente' | 'confirmada'; mine?: boolean } {
+  function statusOfHour(hour: number): { kind: 'passado' | 'livre' | 'pendente' | 'aprovada'; mine?: boolean } {
     const slotStart = sameSlot(date, hour)
     const slotEnd = sameSlot(date, hour + 1)
-    if (slotStart < now) return { kind: 'passado' }
+
+    if (slotStart.getTime() < now.getTime()) return { kind: 'passado' }
 
     for (const o of ocupacoes) {
-      const oStart = new Date(o.inicio)
-      const oEnd = new Date(o.fim)
-      if (slotStart < oEnd && slotEnd > oStart) {
-        if (o.status === 'pendente') return { kind: 'pendente', mine: o.mine }
-        if (o.status === 'confirmada') return { kind: 'confirmada', mine: o.mine }
+      const oStart = o.inicio instanceof Date ? o.inicio : new Date(o.inicio)
+      const oEnd = o.fim instanceof Date ? o.fim : new Date(o.fim)
+
+      // Checa sobreposição de horários usando marcas de tempo numéricas absolutas (.getTime)
+      if (slotStart.getTime() < oEnd.getTime() && slotEnd.getTime() > oStart.getTime()) {
+        const st = o.status.toLowerCase()
+        if (st === 'pendente') return { kind: 'pendente', mine: o.mine }
+        // Suporta tanto 'aprovada' (usado no seu banco) quanto 'confirmada'
+        if (st === 'aprovada' || st === 'confirmada') return { kind: 'aprovada', mine: o.mine }
       }
     }
     return { kind: 'livre' }
@@ -60,7 +65,7 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
     setSelected((prev) => {
       if (prev.includes(hour)) return prev.filter((h) => h !== hour)
       const next = [...prev, hour].sort((a, b) => a - b)
-      // enforce contiguity: keep only the contiguous run touching the new hour
+      // Mantém apenas o bloco contínuo de horários selecionados pelo usuário
       const idx = next.indexOf(hour)
       let lo = idx
       while (lo > 0 && next[lo - 1] === next[lo] - 1) lo--
@@ -82,7 +87,7 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
         <div className="flex items-center gap-3 font-mono text-[11px] text-(--color-ink-soft)">
           <Legend color="bg-white border border-dashed border-(--color-cyan)" label="livre" />
           <Legend color="bg-(--color-amber)" label="pendente" />
-          <Legend color="bg-(--color-cyan)" label="confirmada" />
+          <Legend color="bg-(--color-cyan)" label="aprovada" />
         </div>
       </div>
 
@@ -94,7 +99,7 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
             'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono'
           if (st.kind === 'passado') {
             cls += ' border-transparent bg-black/[0.03] text-(--color-ink-soft)/50 cursor-not-allowed'
-          } else if (st.kind === 'confirmada') {
+          } else if (st.kind === 'aprovada') {
             cls += ' border-(--color-cyan) bg-(--color-cyan) text-white cursor-not-allowed'
           } else if (st.kind === 'pendente') {
             cls += ' border-(--color-amber) bg-(--color-amber) text-white cursor-not-allowed'
@@ -108,14 +113,14 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
             <button
               type="button"
               key={h}
-              disabled={disabled || st.kind === 'passado' || st.kind === 'confirmada' || st.kind === 'pendente'}
+              disabled={disabled || st.kind === 'passado' || st.kind === 'aprovada' || st.kind === 'pendente'}
               onClick={() => toggleHour(h)}
               className={cls}
             >
               <span>{hourLabel(h)} – {hourLabel(h + 1)}</span>
               <span className="text-[11px] opacity-80">
                 {st.kind === 'passado' && 'indisponível'}
-                {st.kind === 'confirmada' && (st.mine ? 'sua reserva' : 'ocupado')}
+                {st.kind === 'aprovada' && (st.mine ? 'sua reserva' : 'ocupado')}
                 {st.kind === 'pendente' && (st.mine ? 'sua solicitação' : 'em análise')}
                 {st.kind === 'livre' && (isSelected ? 'selecionado' : '')}
               </span>
@@ -131,12 +136,14 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
           </p>
           <div className="flex gap-2">
             <button
+              type="button"
               onClick={() => setSelected([])}
               className="rounded-md border border-(--color-border) bg-white px-3 py-1.5 text-xs font-medium text-(--color-ink-soft) hover:bg-black/5"
             >
               limpar
             </button>
             <button
+              type="button"
               onClick={() => {
                 onConfirmSelection(sameSlot(date, min), sameSlot(date, max + 1))
                 setSelected([])

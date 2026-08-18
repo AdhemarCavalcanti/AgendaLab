@@ -45,7 +45,7 @@ export function AdminDashboard() {
     [reservasSalas, reservasEquip]
   )
 
-  const concluidas = todasReservas.filter((r) => r.status === 'confirmada')
+  const concluidas = todasReservas.filter((r) => r.status === 'aprovada')
 
   const porSemana = useMemo(() => {
     const map = new Map<string, number>()
