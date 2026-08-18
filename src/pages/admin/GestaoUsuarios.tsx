@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { Administrador, PreCadastro, Usuario } from '../../lib/types'
+import type { Administrador, Usuario } from '../../lib/types'
 import { Modal } from '../../components/Modal'
 
 type Aba = 'usuarios' | 'administradores'
@@ -9,7 +9,6 @@ export function AdminGestaoUsuarios() {
   const [aba, setAba] = useState<Aba>('usuarios')
   const [usuarios, setUsuarios] = useState<Usuario[]>([])
   const [administradores, setAdministradores] = useState<Administrador[]>([])
-  const [pendentes, setPendentes] = useState<PreCadastro[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
@@ -18,15 +17,14 @@ export function AdminGestaoUsuarios() {
   async function carregar() {
     setLoading(true)
     setErro(null)
-    const [{ data: u, error: eU }, { data: a, error: eA }, { data: p, error: eP }] = await Promise.all([
+    const [{ data: u, error: eU }, { data: a, error: eA }] = await Promise.all([
       supabase.from('usuarios').select('*').order('nome', { ascending: true }),
       supabase.from('administradores').select('*').order('nome', { ascending: true }),
-      supabase.rpc('admin_listar_pre_cadastros'),
     ])
-    if (eU || eA || eP) setErro((eU ?? eA ?? eP)?.message ?? null)
+
+    if (eU || eA) setErro((eU ?? eA)?.message ?? null)
     setUsuarios((u as Usuario[]) ?? [])
     setAdministradores((a as Administrador[]) ?? [])
-    setPendentes((p as PreCadastro[]) ?? [])
     setLoading(false)
   }
 
@@ -34,13 +32,20 @@ export function AdminGestaoUsuarios() {
     carregar()
   }, [])
 
-  const pendentesUsuarios = pendentes.filter((p) => p.tipo === 'usuario')
-  const pendentesAdmins = pendentes.filter((p) => p.tipo === 'administrador')
+  // Separa os registros pendentes (sem UUID vinculado) e ativados (com UUID)
+  const pendentesUsuarios = usuarios.filter((u) => !u.uuid)
+  const ativadosUsuarios = usuarios.filter((u) => !!u.uuid)
 
-  async function cancelarPendente(item: PreCadastro) {
-    if (!confirm(`Cancelar o pré-cadastro de ${item.nome}?`)) return
-    const { error } = await supabase.rpc('admin_cancelar_pre_cadastro', { p_tipo: item.tipo, p_email: item.email })
-    if (error) alert('Erro: ' + error.message)
+  const pendentesAdmins = administradores.filter((a) => !a.uuid)
+  const ativadosAdmins = administradores.filter((a) => !!a.uuid)
+
+  async function cancelarPendente(id: string | number, tabela: 'usuarios' | 'administradores', nome: string) {
+    if (!confirm(`Cancelar o pré-cadastro de ${nome}?`)) return
+    
+    const campoId = tabela === 'usuarios' ? 'id_usuario' : 'id_adm'
+    const { error } = await supabase.from(tabela).delete().eq(campoId, id)
+
+    if (error) alert('Erro ao cancelar: ' + error.message)
     else carregar()
   }
 
@@ -78,28 +83,57 @@ export function AdminGestaoUsuarios() {
         <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
       ) : (
         <div className="space-y-8">
+          {/* Seção de Pendentes */}
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-(--color-ink-soft)">
               Pendentes de ativação {aba === 'usuarios' ? `(${pendentesUsuarios.length})` : `(${pendentesAdmins.length})`}
             </h2>
-            {(aba === 'usuarios' ? pendentesUsuarios : pendentesAdmins).length === 0 ? (
+            {aba === 'usuarios' ? (
+              pendentesUsuarios.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
+                  Nenhum pré-cadastro de aluno pendente.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {pendentesUsuarios.map((u) => (
+                    <div key={u.id_usuario} className="card flex flex-wrap items-center justify-between gap-3 p-3">
+                      <div>
+                        <p className="font-medium">{u.nome}</p>
+                        <p className="text-sm text-(--color-ink-soft)">{u.email}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2.5 py-1 font-mono text-xs text-(--color-amber)">
+                          matrícula: {u.matricula ?? '—'}
+                        </span>
+                        <button
+                          onClick={() => cancelarPendente(u.id_usuario, 'usuarios', u.nome)}
+                          className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium text-(--color-coral) hover:bg-(--color-coral-soft)"
+                        >
+                          cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : pendentesAdmins.length === 0 ? (
               <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
-                Nenhum pré-cadastro pendente.
+                Nenhum pré-cadastro de administrador pendente.
               </p>
             ) : (
               <div className="space-y-2">
-                {(aba === 'usuarios' ? pendentesUsuarios : pendentesAdmins).map((p) => (
-                  <div key={p.email} className="card flex flex-wrap items-center justify-between gap-3 p-3">
+                {pendentesAdmins.map((a) => (
+                  <div key={a.id_adm} className="card flex flex-wrap items-center justify-between gap-3 p-3">
                     <div>
-                      <p className="font-medium">{p.nome}</p>
-                      <p className="text-sm text-(--color-ink-soft)">{p.email}</p>
+                      <p className="font-medium">{a.nome}</p>
+                      <p className="text-sm text-(--color-ink-soft)">{a.email}</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2.5 py-1 font-mono text-xs text-(--color-amber)">
-                        {aba === 'usuarios' ? `matrícula: ${p.identificador}` : `código: ${p.identificador}`}
+                        código: {a.codigo ?? '—'}
                       </span>
                       <button
-                        onClick={() => cancelarPendente(p)}
+                        onClick={() => cancelarPendente(a.id_adm, 'administradores', a.nome)}
                         className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium text-(--color-coral) hover:bg-(--color-coral-soft)"
                       >
                         cancelar
@@ -111,11 +145,12 @@ export function AdminGestaoUsuarios() {
             )}
           </section>
 
+          {/* Seção de Contas Ativas */}
           <section>
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-(--color-ink-soft)">
-              Contas ativas {aba === 'usuarios' ? `(${usuarios.length})` : `(${administradores.length})`}
+              Contas ativas {aba === 'usuarios' ? `(${ativadosUsuarios.length})` : `(${ativadosAdmins.length})`}
             </h2>
-            {(aba === 'usuarios' ? usuarios : administradores).length === 0 ? (
+            {(aba === 'usuarios' ? ativadosUsuarios : ativadosAdmins).length === 0 ? (
               <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
                 Nenhuma conta ativa ainda.
               </p>
@@ -131,14 +166,14 @@ export function AdminGestaoUsuarios() {
                   </thead>
                   <tbody>
                     {aba === 'usuarios'
-                      ? usuarios.map((u) => (
+                      ? ativadosUsuarios.map((u) => (
                           <tr key={u.id_usuario} className="border-t border-(--color-border)">
                             <td className="px-4 py-3 font-medium">{u.nome}</td>
                             <td className="px-4 py-3">{u.email}</td>
                             <td className="px-4 py-3 font-mono">{u.matricula ?? '—'}</td>
                           </tr>
                         ))
-                      : administradores.map((a) => (
+                      : ativadosAdmins.map((a) => (
                           <tr key={a.id_adm} className="border-t border-(--color-border)">
                             <td className="px-4 py-3 font-medium">{a.nome}</td>
                             <td className="px-4 py-3">{a.email}</td>
@@ -198,11 +233,14 @@ function PreCadastroForm({
     setErro(null)
 
     if (tipo === 'usuarios') {
-      const { error } = await supabase.rpc('admin_criar_pre_cadastro_usuario', {
-        p_nome: nome,
-        p_email: email,
-        p_matricula: matricula,
-      })
+      const { error } = await supabase.from('usuarios').insert([
+        {
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          matricula: matricula.trim(),
+        },
+      ])
+
       setSalvando(false)
       if (error) return setErro(error.message)
       onCriado()
@@ -212,11 +250,14 @@ function PreCadastroForm({
         return setErro('Por favor, gere um código de verificação para o administrador.')
       }
 
-      const { error } = await supabase.rpc('admin_criar_pre_cadastro_admin', {
-        p_nome: nome,
-        p_email: email,
-        p_codigo: codigoAdmin,
-      })
+      const { error } = await supabase.from('administradores').insert([
+        {
+          nome: nome.trim(),
+          email: email.trim().toLowerCase(),
+          codigo: codigoAdmin.trim().toUpperCase(),
+        },
+      ])
+
       setSalvando(false)
       if (error) return setErro(error.message)
       onCriado()
