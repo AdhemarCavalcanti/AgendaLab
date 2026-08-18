@@ -4,17 +4,21 @@ import type { Equipamento, Sala, StatusRecurso, TipoRecurso } from '../../lib/ty
 import { StatusBadge } from '../../components/StatusBadge'
 import { Modal } from '../../components/Modal'
 
+// Tipagem estendida para garantir a tipagem da coluna regras_uso
+type SalaComRegras = Sala & { regras_uso?: string }
+type EquipamentoComRegras = Equipamento & { regras_uso?: string }
+
 const STATUS_OPTS: StatusRecurso[] = ['livre', 'ocupado', 'manutencao']
 
 export function AdminRecursos() {
   const [aba, setAba] = useState<TipoRecurso>('sala')
-  const [salas, setSalas] = useState<Sala[]>([])
-  const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
+  const [salas, setSalas] = useState<SalaComRegras[]>([])
+  const [equipamentos, setEquipamentos] = useState<EquipamentoComRegras[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
 
   const [modalAberto, setModalAberto] = useState(false)
-  const [editando, setEditando] = useState<Sala | Equipamento | null>(null)
+  const [editando, setEditando] = useState<SalaComRegras | EquipamentoComRegras | null>(null)
 
   async function carregar() {
     setLoading(true)
@@ -23,8 +27,8 @@ export function AdminRecursos() {
       supabase.from('equipamentos').select('*').order('nome', { ascending: true }),
     ])
     if (eS || eE) setErro((eS ?? eE)?.message ?? null)
-    setSalas((s as Sala[]) ?? [])
-    setEquipamentos((e as Equipamento[]) ?? [])
+    setSalas((s as SalaComRegras[]) ?? [])
+    setEquipamentos((e as EquipamentoComRegras[]) ?? [])
     setLoading(false)
   }
 
@@ -41,10 +45,10 @@ export function AdminRecursos() {
     else carregar()
   }
 
-  async function alternarManutencao(item: Sala | Equipamento) {
+  async function alternarManutencao(item: SalaComRegras | EquipamentoComRegras) {
     const tabela = aba === 'sala' ? 'salas' : 'equipamentos'
     const coluna = aba === 'sala' ? 'id_sala' : 'id'
-    const id = aba === 'sala' ? (item as Sala).id_sala : (item as Equipamento).id
+    const id = aba === 'sala' ? (item as SalaComRegras).id_sala : (item as EquipamentoComRegras).id
     const novoStatus: StatusRecurso = item.status === 'manutencao' ? 'livre' : 'manutencao'
     const { error } = await supabase.from(tabela).update({ status: novoStatus }).eq(coluna, id)
     if (error) alert('Erro: ' + error.message)
@@ -98,18 +102,24 @@ export function AdminRecursos() {
               <tr>
                 <th className="px-4 py-3">Nome</th>
                 <th className="px-4 py-3">{aba === 'sala' ? 'Capacidade' : 'Quantidade'}</th>
+                <th className="px-4 py-3">Regras de Uso</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
               {lista.map((item) => {
-                const id = aba === 'sala' ? (item as Sala).id_sala : (item as Equipamento).id
-                const qtd = aba === 'sala' ? (item as Sala).lotacao : (item as Equipamento).quantidade
+                const id = aba === 'sala' ? (item as SalaComRegras).id_sala : (item as EquipamentoComRegras).id
+                const qtd = aba === 'sala' ? (item as SalaComRegras).lotacao : (item as EquipamentoComRegras).quantidade
                 return (
                   <tr key={id} className="border-t border-(--color-border)">
                     <td className="px-4 py-3 font-medium">{item.nome}</td>
                     <td className="px-4 py-3 font-mono">{qtd}</td>
+                    <td className="max-w-xs px-4 py-3">
+                      <p className="line-clamp-2 text-xs text-(--color-ink-soft)">
+                        {item.regras_uso ? item.regras_uso : <span className="italic opacity-50">Nenhuma regra cadastrada</span>}
+                      </p>
+                    </td>
                     <td className="px-4 py-3">
                       <StatusBadge status={item.status} tipo="recurso" />
                     </td>
@@ -168,15 +178,16 @@ function RecursoForm({
   onSaved,
 }: {
   tipo: TipoRecurso
-  item: Sala | Equipamento | null
+  item: SalaComRegras | EquipamentoComRegras | null
   onClose: () => void
   onSaved: () => void
 }) {
   const isSala = tipo === 'sala'
   const [nome, setNome] = useState(item?.nome ?? '')
   const [quantidadeOuLotacao, setQuantidadeOuLotacao] = useState(
-    isSala ? (item as Sala)?.lotacao ?? 10 : (item as Equipamento)?.quantidade ?? 1
+    isSala ? (item as SalaComRegras)?.lotacao ?? 10 : (item as EquipamentoComRegras)?.quantidade ?? 1
   )
+  const [regrasUso, setRegrasUso] = useState(item?.regras_uso ?? '')
   const [status, setStatus] = useState<StatusRecurso>(item?.status ?? 'livre')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -191,17 +202,27 @@ function RecursoForm({
     setErro(null)
 
     if (isSala) {
-      const payload = { nome, lotacao: quantidadeOuLotacao, status }
+      const payload = {
+        nome,
+        lotacao: quantidadeOuLotacao,
+        status,
+        regras_uso: regrasUso.trim() || null,
+      }
       const query = item
-        ? supabase.from('salas').update(payload).eq('id_sala', (item as Sala).id_sala)
+        ? supabase.from('salas').update(payload).eq('id_sala', (item as SalaComRegras).id_sala)
         : supabase.from('salas').insert(payload)
       const { error } = await query
       setSalvando(false)
       if (error) return setErro(error.message)
     } else {
-      const payload = { nome, quantidade: quantidadeOuLotacao, status }
+      const payload = {
+        nome,
+        quantidade: quantidadeOuLotacao,
+        status,
+        regras_uso: regrasUso.trim() || null,
+      }
       const query = item
-        ? supabase.from('equipamentos').update(payload).eq('id', (item as Equipamento).id)
+        ? supabase.from('equipamentos').update(payload).eq('id', (item as EquipamentoComRegras).id)
         : supabase.from('equipamentos').insert(payload)
       const { error } = await query
       setSalvando(false)
@@ -233,6 +254,17 @@ function RecursoForm({
             onChange={(e) => setQuantidadeOuLotacao(Number(e.target.value))}
             className="input"
             required
+          />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Regras de Uso</span>
+          <textarea
+            value={regrasUso}
+            onChange={(e) => setRegrasUso(e.target.value)}
+            className="input"
+            rows={3}
+            placeholder="Digite as instruções e regras para utilização deste recurso..."
           />
         </label>
 
