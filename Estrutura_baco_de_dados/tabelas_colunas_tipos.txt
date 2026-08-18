@@ -1,0 +1,47 @@
+table_schema,table_name,column_name,data_type,is_nullable,column_default
+private,pre_administradores,id_adm,bigint,NO,null
+private,pre_administradores,nome,text,NO,null
+private,pre_administradores,email,text,NO,null
+private,pre_administradores,codigo,text,NO,null
+private,pre_administradores,criado_em,timestamp with time zone,YES,now()
+private,pre_usuarios,id,bigint,NO,null
+private,pre_usuarios,nome,text,NO,null
+private,pre_usuarios,email,text,NO,null
+private,pre_usuarios,matricula,text,NO,null
+private,pre_usuarios,criado_em,timestamp with time zone,YES,now()
+public,administradores,id_adm,bigint,NO,null
+public,administradores,uuid,uuid,YES,null
+public,administradores,nome,text,NO,null
+public,administradores,email,text,NO,null
+public,administradores,codigo,text,YES,null
+public,equipamentos,id,bigint,NO,null
+public,equipamentos,nome,text,NO,null
+public,equipamentos,quantidade,integer,NO,null
+public,equipamentos,status,USER-DEFINED,NO,'livre'::status_recurso
+public,reservas_equipamentos,id,bigint,NO,null
+public,reservas_equipamentos,id_usuario,bigint,NO,null
+public,reservas_equipamentos,id_equipamento,bigint,NO,null
+public,reservas_equipamentos,id_adm,bigint,YES,null
+public,reservas_equipamentos,inicio,timestamp with time zone,NO,null
+public,reservas_equipamentos,fim,timestamp with time zone,NO,null
+public,reservas_equipamentos,status,USER-DEFINED,NO,'pendente'::status_reserva
+public,reservas_equipamentos,observacao,text,YES,null
+public,reservas_salas,id,bigint,NO,null
+public,reservas_salas,id_usuario,bigint,NO,null
+public,reservas_salas,id_sala,bigint,NO,null
+public,reservas_salas,id_adm,bigint,YES,null
+public,reservas_salas,inicio,timestamp with time zone,NO,null
+public,reservas_salas,fim,timestamp with time zone,NO,null
+public,reservas_salas,status,USER-DEFINED,NO,'pendente'::status_reserva
+public,reservas_salas,motivo,text,YES,null
+public,reservas_salas,quantidade_pessoas,integer,YES,null
+public,reservas_salas,observacao,text,YES,null
+public,salas,id_sala,bigint,NO,null
+public,salas,nome,text,NO,null
+public,salas,lotacao,integer,NO,null
+public,salas,status,USER-DEFINED,NO,'livre'::status_recurso
+public,usuarios,id_usuario,bigint,NO,null
+public,usuarios,uuid,uuid,YES,null
+public,usuarios,nome,text,NO,null
+public,usuarios,email,text,NO,null
+public,usuarios,matricula,text,YES,null
