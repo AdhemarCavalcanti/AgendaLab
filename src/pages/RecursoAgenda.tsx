@@ -141,12 +141,14 @@ export function RecursoAgenda() {
       fim: pendingSlot.fim.toISOString(),
       status: 'pendente',
     }
+
     if (tipo === 'sala') {
       payload.motivo = motivo || null
       payload.quantidade_pessoas = qtdPessoas
       payload.observacao = observacao || null
     } else {
       payload.observacao = observacao || null
+      payload.status_devolucao = 'pendente' // <- Adicionado aqui
     }
 
     const { error } = await supabase.from(tabela).insert(payload)
@@ -179,7 +181,7 @@ export function RecursoAgenda() {
 
   const nome = recurso.nome
   const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Quantidade: ${(recurso as Equipamento).quantidade}`
-  
+
   // Valida indisponibilidade comum e equipamento com quantidade zerada
   const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
   const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
@@ -224,9 +226,8 @@ export function RecursoAgenda() {
                 <button
                   key={d.toISOString()}
                   onClick={() => setSelectedDate(d)}
-                  className={`shrink-0 rounded-md border px-3 py-2 text-center font-mono text-xs transition-colors ${
-                    ativo ? 'border-(--color-cyan) bg-(--color-cyan) text-white' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-                  }`}
+                  className={`shrink-0 rounded-md border px-3 py-2 text-center font-mono text-xs transition-colors ${ativo ? 'border-(--color-cyan) bg-(--color-cyan) text-white' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
+                    }`}
                 >
                   <div className="uppercase">{d.toLocaleDateString('pt-BR', { weekday: 'short' })}</div>
                   <div className="text-sm font-semibold">{d.getDate()}</div>
