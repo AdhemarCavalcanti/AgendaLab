@@ -11,6 +11,9 @@ export function AdminGestaoUsuarios() {
   const [administradores, setAdministradores] = useState<Administrador[]>([])
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  
+  // Estado para o filtro de pesquisa
+  const [busca, setBusca] = useState('')
 
   const [modalAberto, setModalAberto] = useState(false)
 
@@ -32,21 +35,47 @@ export function AdminGestaoUsuarios() {
     carregar()
   }, [])
 
-  // Separa os registros pendentes (sem UUID vinculado) e ativados (com UUID)
-  const pendentesUsuarios = usuarios.filter((u) => !u.uuid)
-  const ativadosUsuarios = usuarios.filter((u) => !!u.uuid)
+  // Filtra registros por nome ou e-mail
+  const filtrarPorTermo = <T extends { nome: string; email: string }>(lista: T[]) => {
+    if (!busca.trim()) return lista
+    const termo = busca.toLowerCase().trim()
+    return lista.filter(
+      (item) =>
+        item.nome.toLowerCase().includes(termo) ||
+        item.email.toLowerCase().includes(termo)
+    )
+  }
 
-  const pendentesAdmins = administradores.filter((a) => !a.uuid)
-  const ativadosAdmins = administradores.filter((a) => !!a.uuid)
+  // Listas filtradas e divididas por status
+  const pendentesUsuarios = filtrarPorTermo(usuarios.filter((u) => !u.uuid))
+  const ativadosUsuarios = filtrarPorTermo(usuarios.filter((u) => !!u.uuid))
+
+  const pendentesAdmins = filtrarPorTermo(administradores.filter((a) => !a.uuid))
+  const ativadosAdmins = filtrarPorTermo(administradores.filter((a) => !!a.uuid))
 
   async function cancelarPendente(id: string | number, tabela: 'usuarios' | 'administradores', nome: string) {
     if (!confirm(`Cancelar o pré-cadastro de ${nome}?`)) return
-    
+
     const campoId = tabela === 'usuarios' ? 'id_usuario' : 'id_adm'
     const { error } = await supabase.from(tabela).delete().eq(campoId, id)
 
     if (error) alert('Erro ao cancelar: ' + error.message)
     else carregar()
+  }
+
+  // Função enviada mantida na íntegra
+  async function redefinirSenha(email: string) {
+    if (!confirm(`Enviar e-mail de redefinição de senha para ${email}?`)) return
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/redefinir-senha`,
+    })
+
+    if (error) {
+      alert('Erro ao solicitar redefinição: ' + error.message)
+    } else {
+      alert(`E-mail de redefinição enviado com sucesso para ${email}!`)
+    }
   }
 
   return (
@@ -61,20 +90,42 @@ export function AdminGestaoUsuarios() {
         </button>
       </div>
 
-      <div className="mb-6 flex gap-2">
-        {(['usuarios', 'administradores'] as Aba[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setAba(t)}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-              aba === t
-                ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
-          >
-            {t === 'usuarios' ? 'alunos/pesquisadores' : 'administradores'}
-          </button>
-        ))}
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-2">
+          {(['usuarios', 'administradores'] as Aba[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setAba(t)}
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+                aba === t
+                  ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
+                  : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
+              }`}
+            >
+              {t === 'usuarios' ? 'alunos/pesquisadores' : 'administradores'}
+            </button>
+          ))}
+        </div>
+
+        {/* Input de filtro por nome e e-mail */}
+        <div className="relative w-full sm:w-72">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome ou e-mail…"
+            className="input w-full pr-8 text-sm"
+          />
+          {busca && (
+            <button
+              onClick={() => setBusca('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-(--color-ink-soft) hover:text-(--color-ink)"
+              title="Limpar busca"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {erro && <p className="mb-4 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">{erro}</p>}
@@ -91,7 +142,7 @@ export function AdminGestaoUsuarios() {
             {aba === 'usuarios' ? (
               pendentesUsuarios.length === 0 ? (
                 <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
-                  Nenhum pré-cadastro de aluno pendente.
+                  {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhum pré-cadastro de aluno pendente.'}
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -118,7 +169,7 @@ export function AdminGestaoUsuarios() {
               )
             ) : pendentesAdmins.length === 0 ? (
               <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
-                Nenhum pré-cadastro de administrador pendente.
+                {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhum pré-cadastro de administrador pendente.'}
               </p>
             ) : (
               <div className="space-y-2">
@@ -152,7 +203,7 @@ export function AdminGestaoUsuarios() {
             </h2>
             {(aba === 'usuarios' ? ativadosUsuarios : ativadosAdmins).length === 0 ? (
               <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
-                Nenhuma conta ativa ainda.
+                {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhuma conta ativa ainda.'}
               </p>
             ) : (
               <div className="overflow-x-auto rounded-lg border border-(--color-border)">
@@ -162,6 +213,7 @@ export function AdminGestaoUsuarios() {
                       <th className="px-4 py-3">Nome</th>
                       <th className="px-4 py-3">E-mail</th>
                       <th className="px-4 py-3">{aba === 'usuarios' ? 'Matrícula' : 'Código'}</th>
+                      <th className="px-4 py-3 text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -171,6 +223,14 @@ export function AdminGestaoUsuarios() {
                             <td className="px-4 py-3 font-medium">{u.nome}</td>
                             <td className="px-4 py-3">{u.email}</td>
                             <td className="px-4 py-3 font-mono">{u.matricula ?? '—'}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => redefinirSenha(u.email)}
+                                className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium text-(--color-cyan) hover:bg-(--color-cyan-soft)"
+                              >
+                                redefinir senha
+                              </button>
+                            </td>
                           </tr>
                         ))
                       : ativadosAdmins.map((a) => (
@@ -178,6 +238,14 @@ export function AdminGestaoUsuarios() {
                             <td className="px-4 py-3 font-medium">{a.nome}</td>
                             <td className="px-4 py-3">{a.email}</td>
                             <td className="px-4 py-3 font-mono">{a.codigo ?? '—'}</td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => redefinirSenha(a.email)}
+                                className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium text-(--color-cyan) hover:bg-(--color-cyan-soft)"
+                              >
+                                redefinir senha
+                              </button>
+                            </td>
                           </tr>
                         ))}
                   </tbody>
