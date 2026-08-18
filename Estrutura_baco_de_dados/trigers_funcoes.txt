@@ -1,184 +1,672 @@
 trigers:
 
 schema,tabela,nome_trigger,quando,evento,acao
+auth,users,on_auth_user_created_activation,AFTER,INSERT,EXECUTE FUNCTION app_private.handle_user_activation()
 public,reservas_equipamentos,trg_decrementar_equipamento,AFTER,INSERT,EXECUTE FUNCTION decrementar_equipamento_reserva()
 public,reservas_equipamentos,trg_incrementar_equipamento,AFTER,UPDATE,EXECUTE FUNCTION incrementar_equipamento_devolucao()
+realtime,subscription,tr_check_filters,BEFORE,INSERT,EXECUTE FUNCTION realtime.subscription_check_filters()
+realtime,subscription,tr_check_filters,BEFORE,UPDATE,EXECUTE FUNCTION realtime.subscription_check_filters()
+storage,buckets,enforce_bucket_name_length_trigger,BEFORE,INSERT,EXECUTE FUNCTION storage.enforce_bucket_name_length()
+storage,buckets,enforce_bucket_name_length_trigger,BEFORE,UPDATE,EXECUTE FUNCTION storage.enforce_bucket_name_length()
+storage,buckets,protect_buckets_delete,BEFORE,DELETE,EXECUTE FUNCTION storage.protect_delete()
+storage,objects,protect_objects_delete,BEFORE,DELETE,EXECUTE FUNCTION storage.protect_delete()
+storage,objects,update_objects_updated_at,BEFORE,UPDATE,EXECUTE FUNCTION storage.update_updated_at_column()
 
 
 funções:
 
 schema,nome_funcao,codigo_fonte
-public,admin_cancelar_pre_cadastro,"CREATE OR REPLACE FUNCTION public.admin_cancelar_pre_cadastro(p_tipo text, p_email text)
- RETURNS void
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  IF p_tipo = 'usuario' THEN
-    DELETE FROM public.usuarios 
-    WHERE email = p_email AND uuid IS NULL;
-  ELSIF p_tipo = 'administrador' THEN
-    DELETE FROM public.administradores 
-    WHERE email = p_email AND uuid IS NULL;
-  END IF;
-END;
-$function$
-"
-public,admin_criar_pre_cadastro_admin,"CREATE OR REPLACE FUNCTION public.admin_criar_pre_cadastro_admin(p_nome text, p_email text, p_codigo text)
- RETURNS void
+app_private,handle_user_activation,"CREATE OR REPLACE FUNCTION app_private.handle_user_activation()
+ RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-BEGIN
-  -- Insere diretamente na tabela correta (administradores)
-  INSERT INTO public.administradores (nome, email, codigo)
-  VALUES (p_nome, lower(trim(p_email)), upper(trim(p_codigo)));
-END;
+declare
+  v_matricula text;
+  v_codigo text;
+begin
+  -- Extrai os dados do 'options.data' passados durante o signUp
+  v_matricula := new.raw_user_meta_data->>'matricula';
+  v_codigo := new.raw_user_meta_data->>'codigo';
+
+  -- Se foi fornecida matrícula, vincula o UUID no registro de usuário
+  if v_matricula is not null and v_matricula <> '' then
+    update public.usuarios
+    set uuid = new.id
+    where lower(trim(email)) = lower(trim(new.email))
+      and trim(matricula) = trim(v_matricula)
+      and uuid is null;
+  end if;
+
+  -- Se foi fornecido código, vincula o UUID no registro de administrador
+  if v_codigo is not null and v_codigo <> '' then
+    update public.administradores
+    set uuid = new.id
+    where lower(trim(email)) = lower(trim(new.email))
+      and trim(codigo) = trim(v_codigo)
+      and uuid is null;
+  end if;
+
+  return new;
+end;
 $function$
 "
-public,admin_criar_pre_cadastro_usuario,"CREATE OR REPLACE FUNCTION public.admin_criar_pre_cadastro_usuario(p_nome text, p_email text, p_matricula text)
- RETURNS void
- LANGUAGE plpgsql
- SET search_path TO 'public'
+auth,email,"CREATE OR REPLACE FUNCTION auth.email()
+ RETURNS text
+ LANGUAGE sql
+ STABLE
 AS $function$
-BEGIN
-  INSERT INTO public.usuarios (nome, email, matricula)
-  VALUES (p_nome, p_email, p_matricula);
-END;
+  select 
+  coalesce(
+    nullif(current_setting('request.jwt.claim.email', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'email')
+  )::text
 $function$
 "
-public,admin_listar_pre_cadastros,"CREATE OR REPLACE FUNCTION public.admin_listar_pre_cadastros()
- RETURNS TABLE(tipo text, nome text, email text, identificador text)
- LANGUAGE plpgsql
- SET search_path TO 'public'
+auth,jwt,"CREATE OR REPLACE FUNCTION auth.jwt()
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
 AS $function$
-BEGIN
-  RETURN QUERY
-  -- Busca pré-cadastros de Usuários/Alunos pendentes
-  SELECT 
-    'usuario'::text AS tipo,
-    u.nome,
-    u.email,
-    u.matricula AS identificador
-  FROM public.usuarios u
-  WHERE u.uuid IS NULL
-
-  UNION ALL
-
-  -- Busca pré-cadastros de Administradores pendentes
-  SELECT 
-    'administrador'::text AS tipo,
-    a.nome,
-    a.email,
-    a.codigo AS identificador
-  FROM public.administradores a
-  WHERE a.uuid IS NULL;
-END;
+  select 
+    coalesce(
+        nullif(current_setting('request.jwt.claim', true), ''),
+        nullif(current_setting('request.jwt.claims', true), '')
+    )::jsonb
 $function$
 "
-public,decrementar_equipamento_reserva,"CREATE OR REPLACE FUNCTION public.decrementar_equipamento_reserva()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO ''
+auth,role,"CREATE OR REPLACE FUNCTION auth.role()
+ RETURNS text
+ LANGUAGE sql
+ STABLE
 AS $function$
-BEGIN
-  UPDATE public.equipamentos
-  SET quantidade = quantidade - 1
-  WHERE id = NEW.id_equipamento AND quantidade > 0;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'Equipamento indisponível no momento.';
-  END IF;
-
-  RETURN NEW;
-END;
+  select 
+  coalesce(
+    nullif(current_setting('request.jwt.claim.role', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
+  )::text
 $function$
 "
-public,incrementar_equipamento_devolucao,"CREATE OR REPLACE FUNCTION public.incrementar_equipamento_devolucao()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO ''
+auth,uid,"CREATE OR REPLACE FUNCTION auth.uid()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE
 AS $function$
-BEGIN
-  -- Incrementa o estoque quando o status muda para 'cancelada'
-  IF (NEW.status = 'cancelada' AND OLD.status != 'cancelada') THEN
-    UPDATE public.equipamentos
-    SET quantidade = quantidade + 1
-    WHERE id = NEW.id_equipamento;
-  END IF;
-
-  RETURN NEW;
-END;
+  select 
+  coalesce(
+    nullif(current_setting('request.jwt.claim.sub', true), ''),
+    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub')
+  )::uuid
 $function$
 "
-public,obter_perfil_usuario,"CREATE OR REPLACE FUNCTION public.obter_perfil_usuario(p_uuid uuid)
- RETURNS TABLE(tipo_perfil text, id bigint, nome text, email text)
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  -- Impede consulta de perfis de terceiros
-  IF auth.uid() IS NULL OR auth.uid() <> p_uuid THEN
-    RAISE EXCEPTION 'Acesso negado: você só pode consultar seu próprio perfil.';
-  END IF;
-
-  -- Busca na tabela administradores
-  RETURN QUERY
-  SELECT 'admin'::text, a.id_adm, a.nome, a.email
-  FROM public.administradores a
-  WHERE a.uuid = p_uuid;
-
-  IF FOUND THEN
-    RETURN;
-  END IF;
-
-  -- Busca na tabela usuarios
-  RETURN QUERY
-  SELECT 'aluno'::text, u.id_usuario, u.nome, u.email
-  FROM public.usuarios u
-  WHERE u.uuid = p_uuid;
-
-  RETURN;
-END;
-$function$
+extensions,armor,"CREATE OR REPLACE FUNCTION extensions.armor(bytea, text[], text[])
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_armor$function$
 "
-public,redefinir_senha_exemplo,"CREATE OR REPLACE FUNCTION public.redefinir_senha_exemplo(user_email text)
- RETURNS void
- LANGUAGE plpgsql
- SET search_path TO ''
-AS $function$
-BEGIN
-  -- Lógica executada dentro do banco de dados SQL
-  RAISE NOTICE 'Iniciando processo para %', user_email;
-END;
-$function$
+extensions,armor,"CREATE OR REPLACE FUNCTION extensions.armor(bytea)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_armor$function$
 "
-public,validar_pre_cadastro_admin,"CREATE OR REPLACE FUNCTION public.validar_pre_cadastro_admin(p_email text, p_codigo text)
+extensions,cash_dist,"CREATE OR REPLACE FUNCTION extensions.cash_dist(money, money)
+ RETURNS money
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$cash_dist$function$
+"
+extensions,crypt,"CREATE OR REPLACE FUNCTION extensions.crypt(text, text)
+ RETURNS text
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_crypt$function$
+"
+extensions,date_dist,"CREATE OR REPLACE FUNCTION extensions.date_dist(date, date)
+ RETURNS integer
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$date_dist$function$
+"
+extensions,dearmor,"CREATE OR REPLACE FUNCTION extensions.dearmor(text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_dearmor$function$
+"
+extensions,decrypt,"CREATE OR REPLACE FUNCTION extensions.decrypt(bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_decrypt$function$
+"
+extensions,decrypt_iv,"CREATE OR REPLACE FUNCTION extensions.decrypt_iv(bytea, bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_decrypt_iv$function$
+"
+extensions,digest,"CREATE OR REPLACE FUNCTION extensions.digest(text, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_digest$function$
+"
+extensions,digest,"CREATE OR REPLACE FUNCTION extensions.digest(bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_digest$function$
+"
+extensions,encrypt,"CREATE OR REPLACE FUNCTION extensions.encrypt(bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_encrypt$function$
+"
+extensions,encrypt_iv,"CREATE OR REPLACE FUNCTION extensions.encrypt_iv(bytea, bytea, bytea, text)
+ RETURNS bytea
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pgcrypto', $function$pg_encrypt_iv$function$
+"
+extensions,float4_dist,"CREATE OR REPLACE FUNCTION extensions.float4_dist(real, real)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$float4_dist$function$
+"
+extensions,float8_dist,"CREATE OR REPLACE FUNCTION extensions.float8_dist(double precision, double precision)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$float8_dist$function$
+"
+extensions,gbt_bit_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_compress$function$
+"
+extensions,gbt_bit_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_consistent(internal, bit, smallint, oid, internal)
  RETURNS boolean
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.administradores
-    WHERE email = p_email AND codigo = p_codigo
-  );
-END;
-$function$
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_consistent$function$
 "
-public,validar_pre_cadastro_usuario,"CREATE OR REPLACE FUNCTION public.validar_pre_cadastro_usuario(p_email text, p_matricula text)
+extensions,gbt_bit_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_penalty$function$
+"
+extensions,gbt_bit_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_picksplit$function$
+"
+extensions,gbt_bit_same,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_same$function$
+"
+extensions,gbt_bit_union,"CREATE OR REPLACE FUNCTION extensions.gbt_bit_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bit_union$function$
+"
+extensions,gbt_bool_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_compress$function$
+"
+extensions,gbt_bool_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_consistent(internal, boolean, smallint, oid, internal)
  RETURNS boolean
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.usuarios
-    WHERE email = p_email AND matricula = p_matricula
-  );
-END;
-$function$
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_consistent$function$
 "
-
-
+extensions,gbt_bool_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_fetch$function$
+"
+extensions,gbt_bool_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_penalty$function$
+"
+extensions,gbt_bool_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_picksplit$function$
+"
+extensions,gbt_bool_same,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_same(gbtreekey2, gbtreekey2, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_same$function$
+"
+extensions,gbt_bool_union,"CREATE OR REPLACE FUNCTION extensions.gbt_bool_union(internal, internal)
+ RETURNS gbtreekey2
+ LANGUAGE c
+ IMMUTABLE STRICT
+AS '$libdir/btree_gist', $function$gbt_bool_union$function$
+"
+extensions,gbt_bpchar_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_bpchar_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bpchar_compress$function$
+"
+extensions,gbt_bpchar_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_bpchar_consistent(internal, character, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bpchar_consistent$function$
+"
+extensions,gbt_bytea_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_compress$function$
+"
+extensions,gbt_bytea_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_consistent(internal, bytea, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_consistent$function$
+"
+extensions,gbt_bytea_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_penalty$function$
+"
+extensions,gbt_bytea_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_picksplit$function$
+"
+extensions,gbt_bytea_same,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_same(gbtreekey_var, gbtreekey_var, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_same$function$
+"
+extensions,gbt_bytea_union,"CREATE OR REPLACE FUNCTION extensions.gbt_bytea_union(internal, internal)
+ RETURNS gbtreekey_var
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_bytea_union$function$
+"
+extensions,gbt_cash_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_compress$function$
+"
+extensions,gbt_cash_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_consistent(internal, money, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_consistent$function$
+"
+extensions,gbt_cash_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_distance(internal, money, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_distance$function$
+"
+extensions,gbt_cash_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_fetch$function$
+"
+extensions,gbt_cash_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_penalty$function$
+"
+extensions,gbt_cash_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_picksplit$function$
+"
+extensions,gbt_cash_same,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_same$function$
+"
+extensions,gbt_cash_union,"CREATE OR REPLACE FUNCTION extensions.gbt_cash_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_cash_union$function$
+"
+extensions,gbt_date_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_date_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_compress$function$
+"
+extensions,gbt_date_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_date_consistent(internal, date, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_consistent$function$
+"
+extensions,gbt_date_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_date_distance(internal, date, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_distance$function$
+"
+extensions,gbt_date_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_date_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_fetch$function$
+"
+extensions,gbt_date_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_date_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_penalty$function$
+"
+extensions,gbt_date_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_date_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_picksplit$function$
+"
+extensions,gbt_date_same,"CREATE OR REPLACE FUNCTION extensions.gbt_date_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_same$function$
+"
+extensions,gbt_date_union,"CREATE OR REPLACE FUNCTION extensions.gbt_date_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_date_union$function$
+"
+extensions,gbt_decompress,"CREATE OR REPLACE FUNCTION extensions.gbt_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_decompress$function$
+"
+extensions,gbt_enum_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_compress$function$
+"
+extensions,gbt_enum_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_consistent(internal, anyenum, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_consistent$function$
+"
+extensions,gbt_enum_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_fetch$function$
+"
+extensions,gbt_enum_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_penalty$function$
+"
+extensions,gbt_enum_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_picksplit$function$
+"
+extensions,gbt_enum_same,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_same$function$
+"
+extensions,gbt_enum_union,"CREATE OR REPLACE FUNCTION extensions.gbt_enum_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_enum_union$function$
+"
+extensions,gbt_float4_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_compress$function$
+"
+extensions,gbt_float4_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_consistent(internal, real, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_consistent$function$
+"
+extensions,gbt_float4_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_distance(internal, real, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_distance$function$
+"
+extensions,gbt_float4_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_fetch$function$
+"
+extensions,gbt_float4_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_penalty$function$
+"
+extensions,gbt_float4_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_picksplit$function$
+"
+extensions,gbt_float4_same,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_same(gbtreekey8, gbtreekey8, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_same$function$
+"
+extensions,gbt_float4_union,"CREATE OR REPLACE FUNCTION extensions.gbt_float4_union(internal, internal)
+ RETURNS gbtreekey8
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float4_union$function$
+"
+extensions,gbt_float8_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_compress$function$
+"
+extensions,gbt_float8_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_consistent(internal, double precision, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_consistent$function$
+"
+extensions,gbt_float8_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_distance(internal, double precision, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_distance$function$
+"
+extensions,gbt_float8_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_fetch$function$
+"
+extensions,gbt_float8_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_penalty$function$
+"
+extensions,gbt_float8_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_picksplit$function$
+"
+extensions,gbt_float8_same,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_same$function$
+"
+extensions,gbt_float8_union,"CREATE OR REPLACE FUNCTION extensions.gbt_float8_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_float8_union$function$
+"
+extensions,gbt_inet_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_compress$function$
+"
+extensions,gbt_inet_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_consistent(internal, inet, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_consistent$function$
+"
+extensions,gbt_inet_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_penalty$function$
+"
+extensions,gbt_inet_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_picksplit$function$
+"
+extensions,gbt_inet_same,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_same(gbtreekey16, gbtreekey16, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_same$function$
+"
+extensions,gbt_inet_union,"CREATE OR REPLACE FUNCTION extensions.gbt_inet_union(internal, internal)
+ RETURNS gbtreekey16
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_inet_union$function$
+"
+extensions,gbt_int2_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_compress$function$
+"
+extensions,gbt_int2_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_consistent(internal, smallint, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_consistent$function$
+"
+extensions,gbt_int2_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_distance(internal, smallint, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_distance$function$
+"
+extensions,gbt_int2_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_fetch$function$
+"
+extensions,gbt_int2_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_penalty$function$
+"
+extensions,gbt_int2_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_picksplit$function$
+"
+extensions,gbt_int2_same,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_same(gbtreekey4, gbtreekey4, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_same$function$
+"
+extensions,gbt_int2_union,"CREATE OR REPLACE FUNCTION extensions.gbt_int2_union(internal, internal)
+ RETURNS gbtreekey4
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int2_union$function$
+"
+extensions,gbt_int4_compress,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_compress$function$
+"
+extensions,gbt_int4_consistent,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_consistent(internal, integer, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_consistent$function$
+"
+extensions,gbt_int4_distance,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_distance(internal, integer, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_distance$function$
+"
+extensions,gbt_int4_fetch,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_fetch(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_fetch$function$
+"
+extensions,gbt_int4_penalty,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_penalty$function$
+"
+extensions,gbt_int4_picksplit,"CREATE OR REPLACE FUNCTION extensions.gbt_int4_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/btree_gist', $function$gbt_int4_picksplit$function$
+"
