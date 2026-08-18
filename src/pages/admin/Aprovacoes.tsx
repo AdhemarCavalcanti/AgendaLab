@@ -12,7 +12,8 @@ interface Solicitacao {
   usuarioMatricula?: string
   inicio: string
   fim: string
-  status: string
+  status: 'aprovada' | 'pendente' | 'cancelada'
+  status_devolucao?: 'pendente' | 'devolvido'
   detalhe?: string
 }
 
@@ -31,21 +32,28 @@ export function AdminAprovacoes() {
     setLoading(true)
 
     const [resSalas, resEquip, resDevolucoes, resListaSalas, resListaEquip] = await Promise.all([
+      // 1. Salas pendentes de aprovação
       supabase
         .from('reservas_salas')
         .select('id, id_sala, inicio, fim, motivo, quantidade_pessoas, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
+
+      // 2. Equipamentos pendentes de aprovação
       supabase
         .from('reservas_equipamentos')
         .select('id, id_equipamento, inicio, fim, observacao, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
+
+      // 3. Equipamentos APROVADOS que ainda estão PENDENTES DE DEVOLUÇÃO
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, observacao, status, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, inicio, fim, observacao, status, status_devolucao, usuarios(nome, email, matricula)')
         .eq('status', 'aprovada')
+        .eq('status_devolucao', 'pendente')
         .order('inicio', { ascending: true }),
+
       supabase.from('salas').select('id_sala, nome'),
       supabase.from('equipamentos').select('id, nome'),
     ])
@@ -93,6 +101,7 @@ export function AdminAprovacoes() {
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
+      status_devolucao: r.status_devolucao,
       detalhe: r.observacao ?? undefined,
     }))
 
@@ -122,10 +131,15 @@ export function AdminAprovacoes() {
     setProcessando(item.id)
     const tabela = item.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
     
+    // Ao aprovar equipamento, garante que o status_devolucao inicie como 'pendente'
+    const payloadUpdate = item.tipo === 'equipamento' 
+      ? { status: 'aprovada', status_devolucao: 'pendente', id_adm: meuIdAdm }
+      : { status: 'aprovada', id_adm: meuIdAdm }
+
     const { error } = await supabase
       .from(tabela)
-      .update({ status: 'aprovada', id_adm: meuIdAdm })
-      .eq('id', item.id)
+      .update(payloadUpdate)
+      .eq('id', Number(item.id))
 
     setProcessando(null)
     if (error) alert('Erro: ' + error.message)
@@ -134,14 +148,36 @@ export function AdminAprovacoes() {
 
   async function marcarDevolvido(item: Solicitacao) {
     setProcessando(item.id)
-    const { error } = await supabase
-      .from('reservas_equipamentos')
-      .update({ status: 'cancelada', id_adm: meuIdAdm })
-      .eq('id', item.id)
+    
+    try {
+      // Grava 'devolvido' na coluna status_devolucao
+      const { data, error } = await supabase
+        .from('reservas_equipamentos')
+        .update({ 
+          status_devolucao: 'devolvido', 
+          id_adm: meuIdAdm 
+        })
+        .eq('id', Number(item.id))
+        .select()
 
-    setProcessando(null)
-    if (error) alert('Erro: ' + error.message)
-    else carregar()
+      if (error) {
+        console.error('Erro na atualização:', error)
+        alert('Erro ao registrar devolução: ' + error.message)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        alert('Nenhum registro foi atualizado. Verifique se o ID existe.')
+        return
+      }
+
+      await carregar()
+    } catch (err: any) {
+      console.error('Erro inesperado:', err)
+      alert('Erro inesperado: ' + err.message)
+    } finally {
+      setProcessando(null)
+    }
   }
 
   async function confirmarRejeicao() {
@@ -162,7 +198,7 @@ export function AdminAprovacoes() {
       }
     }
     
-    const { error } = await supabase.from(tabela).update(payload).eq('id', rejeitando.id)
+    const { error } = await supabase.from(tabela).update(payload).eq('id', Number(rejeitando.id))
     setProcessando(null)
     if (error) {
       alert('Erro: ' + error.message)
@@ -230,7 +266,6 @@ export function AdminAprovacoes() {
                   </div>
                   <p className="font-medium">{item.recursoNome} — solicitado por {item.usuarioNome}</p>
                   
-                  {/* Informações adicionais do usuário */}
                   <p className="text-xs text-(--color-ink-soft)">
                     {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
                     {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
@@ -269,11 +304,10 @@ export function AdminAprovacoes() {
               <div>
                 <div className="mb-1 flex items-center gap-2">
                   <span className="font-mono text-[11px] uppercase tracking-wide text-(--color-ink-soft)">equipamento</span>
-                  <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aprovado</span>
+                  <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
                 </div>
                 <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
                 
-                {/* Informações adicionais do usuário */}
                 <p className="text-xs text-(--color-ink-soft)">
                   {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
                   {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
