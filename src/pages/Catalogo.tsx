@@ -48,7 +48,8 @@ export function Catalogo() {
       tipo: 'equipamento',
       nome: e.nome,
       detalhe: `Quantidade disponível: ${e.quantidade}`,
-      status: e.status,
+      // Se quantidade for 0, o status renderizado é "ocupado"
+      status: e.quantidade === 0 ? 'ocupado' : e.status,
     }))
     return [...rSalas, ...rEquip]
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
