@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../lib/supabase'
 
-type Aba = 'entrar' | 'ativar-usuario' | 'ativar-admin'
+type Aba = 'entrar' | 'ativar-usuario' | 'ativar-admin' | 'esqueci-senha'
 
 export function Login() {
   const { signIn, ativarCadastroUsuario, ativarCadastroAdmin } = useAuth()
@@ -17,11 +18,13 @@ export function Login() {
 
   const [error, setError] = useState<string | null>(null)
   const [ok, setOk] = useState(false)
+  const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
   function limparMensagens() {
     setError(null)
     setOk(false)
+    setMensagemSucesso(null)
   }
 
   async function handleLogin(e: FormEvent) {
@@ -68,12 +71,32 @@ export function Login() {
     setOk(true)
   }
 
+  async function handleEsqueciSenha(e: FormEvent) {
+    e.preventDefault()
+    limparMensagens()
+    setLoading(true)
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/redefinir-senha`,
+    })
+
+    setLoading(false)
+
+    if (error) {
+      setError('Erro ao enviar e-mail de redefinição: ' + error.message)
+    } else {
+      setMensagemSucesso(`Enviamos um e-mail para ${email} com o link de redefinição de senha.`)
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-md flex-col justify-center px-4 py-16">
       <div className="reg-mark rounded-xl border border-(--color-border) bg-(--color-surface) p-8 shadow-sm">
         <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">acesso ao sistema</p>
         <h1 className="mb-6 font-display text-2xl font-bold">
-          {aba === 'entrar' ? 'Entrar no AgendaLab' : 'Ativar meu cadastro'}
+          {aba === 'entrar' && 'Entrar no AgendaLab'}
+          {aba === 'esqueci-senha' && 'Redefinir Senha'}
+          {(aba === 'ativar-usuario' || aba === 'ativar-admin') && 'Ativar meu cadastro'}
         </h1>
 
         <div className="mb-6 flex gap-1 rounded-lg bg-(--color-paper) p-1">
@@ -92,7 +115,9 @@ export function Login() {
                 limparMensagens()
               }}
               className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors ${
-                aba === value ? 'bg-(--color-surface) text-(--color-cyan) shadow-sm' : 'text-(--color-ink-soft) hover:text-(--color-ink)'
+                aba === value || (aba === 'esqueci-senha' && value === 'entrar')
+                  ? 'bg-(--color-surface) text-(--color-cyan) shadow-sm'
+                  : 'text-(--color-ink-soft) hover:text-(--color-ink)'
               }`}
             >
               {label}
@@ -108,11 +133,82 @@ export function Login() {
             <Field label="Senha">
               <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="••••••••" />
             </Field>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setAba('esqueci-senha')
+                  limparMensagens()
+                }}
+                className="text-xs font-medium text-(--color-cyan) hover:underline"
+              >
+                Esqueceu a senha?
+              </button>
+            </div>
+
             {error && <ErroMsg texto={error} />}
             <button disabled={loading} type="submit" className="btn-primary w-full">
               {loading ? 'entrando…' : 'entrar'}
             </button>
           </form>
+        )}
+
+        {aba === 'esqueci-senha' && (
+          <div>
+            {mensagemSucesso ? (
+              <div className="space-y-4">
+                <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
+                  {mensagemSucesso}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAba('entrar')
+                    limparMensagens()
+                  }}
+                  className="btn-primary w-full"
+                >
+                  Voltar para o Login
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleEsqueciSenha} className="space-y-4">
+                <p className="text-xs text-(--color-ink-soft)">
+                  Informe o seu e-mail cadastrado. Enviaremos um link de confirmação para você cadastrar uma nova senha.
+                </p>
+                <Field label="E-mail cadastrado">
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="input"
+                    placeholder="voce@universidade.edu"
+                  />
+                </Field>
+
+                {error && <ErroMsg texto={error} />}
+
+                <button disabled={loading} type="submit" className="btn-primary w-full">
+                  {loading ? 'enviando…' : 'enviar e-mail de redefinição'}
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAba('entrar')
+                      limparMensagens()
+                    }}
+                    className="text-xs font-medium text-(--color-ink-soft) hover:text-(--color-ink)"
+                  >
+                    ← Voltar para o Login
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
 
         {aba === 'ativar-usuario' && (
