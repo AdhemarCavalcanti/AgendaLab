@@ -35,14 +35,18 @@ export function AdminGestaoUsuarios() {
     carregar()
   }, [])
 
-  // Filtra registros por nome ou e-mail
-  const filtrarPorTermo = <T extends { nome: string; email: string }>(lista: T[]) => {
+  // Função genérica de filtro por nome, e-mail, matrícula ou código
+  const filtrarPorTermo = <T extends { nome: string; email: string; matricula?: string | null; codigo?: string | null }>(
+    lista: T[]
+  ) => {
     if (!busca.trim()) return lista
     const termo = busca.toLowerCase().trim()
     return lista.filter(
       (item) =>
         item.nome.toLowerCase().includes(termo) ||
-        item.email.toLowerCase().includes(termo)
+        item.email.toLowerCase().includes(termo) ||
+        (item.matricula && item.matricula.toLowerCase().includes(termo)) ||
+        (item.codigo && item.codigo.toLowerCase().includes(termo))
     )
   }
 
@@ -53,7 +57,7 @@ export function AdminGestaoUsuarios() {
   const pendentesAdmins = filtrarPorTermo(administradores.filter((a) => !a.uuid))
   const ativadosAdmins = filtrarPorTermo(administradores.filter((a) => !!a.uuid))
 
-  async function cancelarPendente(id: string | number, tabela: 'usuarios' | 'administradores', nome: string) {
+  async function cancelarPendente(id: number, tabela: 'usuarios' | 'administradores', nome: string) {
     if (!confirm(`Cancelar o pré-cadastro de ${nome}?`)) return
 
     const campoId = tabela === 'usuarios' ? 'id_usuario' : 'id_adm'
@@ -63,7 +67,6 @@ export function AdminGestaoUsuarios() {
     else carregar()
   }
 
-  // Função enviada mantida na íntegra
   async function redefinirSenha(email: string) {
     if (!confirm(`Enviar e-mail de redefinição de senha para ${email}?`)) return
 
@@ -107,13 +110,13 @@ export function AdminGestaoUsuarios() {
           ))}
         </div>
 
-        {/* Input de filtro por nome e e-mail */}
-        <div className="relative w-full sm:w-72">
+        {/* Input de busca */}
+        <div className="relative w-full sm:w-80">
           <input
             type="text"
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome ou e-mail…"
+            placeholder={aba === 'usuarios' ? "Buscar por nome, e-mail ou matrícula…" : "Buscar por nome, e-mail ou código…"}
             className="input w-full pr-8 text-sm"
           />
           {busca && (
