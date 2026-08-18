@@ -16,6 +16,7 @@ export function Catalogo() {
   const [salas, setSalas] = useState<Sala[]>([])
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
   const [tipo, setTipo] = useState<'todos' | TipoRecurso>('todos')
+  const [statusFiltro, setStatusFiltro] = useState<string>('todos')
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
@@ -35,56 +36,146 @@ export function Catalogo() {
     load()
   }, [])
 
+  // Função para redefinir todos os filtros
+  const limparFiltros = () => {
+    setBusca('')
+    setTipo('todos')
+    setStatusFiltro('todos')
+  }
+
+  // Verifica se há algum filtro ativo diferente do padrão
+  const temFiltroAtivo = busca !== '' || tipo !== 'todos' || statusFiltro !== 'todos'
+
   const recursos: Recurso[] = useMemo(() => {
-    const rSalas: Recurso[] = salas.map((s) => ({
-      id: s.id_sala,
-      tipo: 'sala',
-      nome: s.nome,
-      detalhe: `Capacidade: ${s.lotacao} pessoas`,
-      status: s.status,
-    }))
+    const rSalas: Recurso[] = salas.map((s) => {
+      let statusFormatado: string = s.status
+      if (s.status === 'livre') statusFormatado = 'disponível'
+      else if (s.status === 'manutencao') statusFormatado = 'manutenção'
+
+      return {
+        id: s.id_sala,
+        tipo: 'sala',
+        nome: s.nome,
+        detalhe: `Capacidade: ${s.lotacao} pessoas`,
+        status: statusFormatado,
+      }
+    })
+
     const rEquip: Recurso[] = equipamentos.map((e) => ({
       id: e.id,
       tipo: 'equipamento',
       nome: e.nome,
       detalhe: `Quantidade disponível: ${e.quantidade}`,
-      // Se quantidade for 0, o status renderizado é "ocupado"
-      status: e.quantidade === 0 ? 'ocupado' : e.status,
+      status: e.quantidade > 0 ? 'disponível' : 'ocupado',
     }))
+
     return [...rSalas, ...rEquip]
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
+      .filter((r) => statusFiltro === 'todos' || r.status.toLowerCase() === statusFiltro.toLowerCase())
       .filter((r) => r.nome.toLowerCase().includes(busca.toLowerCase()))
-  }, [salas, equipamentos, tipo, busca])
+  }, [salas, equipamentos, tipo, statusFiltro, busca])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
       <div className="mb-8">
         <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">catálogo de recursos</p>
         <h1 className="font-display text-3xl font-bold">Salas e equipamentos disponíveis</h1>
-        <p className="mt-1 text-(--color-ink-soft)">Filtre por tipo, busque por nome e veja o status em tempo real.</p>
+        <p className="mt-1 text-(--color-ink-soft)">Filtre por tipo, status e busque por nome em tempo real.</p>
       </div>
 
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar por nome…"
-          className="input sm:max-w-xs"
-        />
-        <div className="flex gap-2">
-          {(['todos', 'sala', 'equipamento'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTipo(t)}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium capitalize transition-colors ${
-                tipo === t
-                  ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                  : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-              }`}
-            >
-              {t === 'todos' ? 'todos' : t === 'sala' ? 'salas' : 'equipamentos'}
-            </button>
-          ))}
+      {/* Painel de Filtros Estruturado */}
+      <div className="mb-8 rounded-xl border border-(--color-border) bg-black/5 p-4 md:p-5">
+        <div className="flex flex-col gap-4">
+          
+          {/* Linha Superior: Campo de Busca + Botão Limpar */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-md">
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome do recurso..."
+                className="input w-full pr-8"
+              />
+              {busca && (
+                <button
+                  onClick={() => setBusca('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-(--color-ink-soft) hover:text-(--color-ink)"
+                  title="Limpar busca"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {temFiltroAtivo && (
+              <button
+                onClick={limparFiltros}
+                className="self-start text-xs font-semibold text-(--color-coral) underline underline-offset-4 transition-opacity hover:opacity-80 sm:self-auto"
+              >
+                Limpar todos os filtros
+              </button>
+            )}
+          </div>
+
+          <hr className="border-(--color-border)/50" />
+
+          {/* Linha Inferior: Seletores Didáticos */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            
+            {/* Grupo Tipo */}
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
+                Tipo de Recurso
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: 'todos', label: 'Todos' },
+                  { value: 'sala', label: 'Salas' },
+                  { value: 'equipamento', label: 'Equipamentos' },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    onClick={() => setTipo(t.value as 'todos' | TipoRecurso)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                      tipo === t.value
+                        ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) shadow-xs'
+                        : 'border-(--color-border) bg-white text-(--color-ink-soft) hover:bg-black/5'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Grupo Status */}
+            <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
+                Status de Disponibilidade
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { value: 'todos', label: 'Todos' },
+                  { value: 'disponível', label: 'Disponível' },
+                  { value: 'ocupado', label: 'Ocupado' },
+                  { value: 'manutenção', label: 'Manutenção' },
+                ].map((s) => (
+                  <button
+                    key={s.value}
+                    onClick={() => setStatusFiltro(s.value)}
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                      statusFiltro === s.value
+                        ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) shadow-xs'
+                        : 'border-(--color-border) bg-white text-(--color-ink-soft) hover:bg-black/5'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </div>
         </div>
       </div>
 
@@ -97,9 +188,17 @@ export function Catalogo() {
       {loading ? (
         <p className="font-mono text-sm text-(--color-ink-soft)">carregando recursos…</p>
       ) : recursos.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">
-          Nenhum recurso encontrado para esse filtro.
-        </p>
+        <div className="rounded-lg border border-dashed border-(--color-border) p-10 text-center">
+          <p className="text-(--color-ink-soft)">Nenhum recurso encontrado com os filtros aplicados.</p>
+          {temFiltroAtivo && (
+            <button
+              onClick={limparFiltros}
+              className="mt-3 text-sm font-medium text-(--color-cyan) hover:underline"
+            >
+              Resetar filtros
+            </button>
+          )}
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {recursos.map((r) => (
