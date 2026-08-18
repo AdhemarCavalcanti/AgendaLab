@@ -313,7 +313,20 @@ function PreCadastroForm({
       ])
 
       setSalvando(false)
-      if (error) return setErro(error.message)
+
+      if (error) {
+        if (error.code === '23505') {
+          if (error.message.includes('matricula')) {
+            return setErro('Esta matrícula já está cadastrada para outro aluno.')
+          }
+          if (error.message.includes('email')) {
+            return setErro('Este e-mail já está cadastrado.')
+          }
+          return setErro('Já existe um aluno cadastrado com estes dados.')
+        }
+        return setErro(error.message)
+      }
+
       onCriado()
     } else {
       if (!codigoAdmin) {
@@ -330,7 +343,20 @@ function PreCadastroForm({
       ])
 
       setSalvando(false)
-      if (error) return setErro(error.message)
+
+      if (error) {
+        if (error.code === '23505') {
+          if (error.message.includes('codigo')) {
+            return setErro('Este código de administrador já está em uso. Por favor, gere um novo código.')
+          }
+          if (error.message.includes('email')) {
+            return setErro('Este e-mail já está cadastrado.')
+          }
+          return setErro('Já existe um administrador cadastrado com estes dados.')
+        }
+        return setErro(error.message)
+      }
+
       onCriado()
     }
   }
