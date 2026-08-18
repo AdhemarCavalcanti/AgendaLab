@@ -13,9 +13,9 @@ interface AuthContextValue {
   /** id_adm (bigint) do admin logado, quando admin */
   meuIdAdm: number | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>
-  ativarCadastroUsuario: (params: { nome: string; email: string; password: string; matricula: string }) => Promise<{ error: string | null }>
-  ativarCadastroAdmin: (params: { nome: string; email: string; password: string; codigo: string }) => Promise<{ error: string | null }>
+  signIn: (email: string, password: string) => Promise<{ error: string | null; role: Role }>
+  ativarCadastroUsuario: (params: { email: string; password: string; matricula: string }) => Promise<{ error: string | null }>
+  ativarCadastroAdmin: (params: { email: string; password: string; codigo: string }) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshPerfil: () => Promise<void>
 }
@@ -30,37 +30,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [meuIdAdm, setMeuIdAdm] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function resolvePerfil(uid: string) {
-    // is_admin()/get_my_user_id() são SECURITY DEFINER: funcionam independente de RLS
-    const { data: souAdmin } = await supabase.rpc('is_admin')
+  async function resolvePerfil(uid: string): Promise<Role> {
+    const { data, error } = await supabase.rpc('obter_perfil_usuario', { p_uuid: uid })
 
-    if (souAdmin) {
-      const { data: adm } = await supabase.from('administradores').select('*').eq('uuid', uid).maybeSingle()
-      if (adm) {
-        setRole('admin')
-        setPerfil(adm as Administrador)
-        setMeuIdAdm((adm as Administrador).id_adm)
-        setMeuIdUsuario(null)
-        return
-      }
+    if (error || !data || data.length === 0) {
+      setRole(null)
+      setPerfil(null)
+      setMeuIdUsuario(null)
+      setMeuIdAdm(null)
+      return null
     }
 
-    const { data: myId } = await supabase.rpc('get_my_user_id')
-    if (myId) {
-      const { data: usr } = await supabase.from('usuarios').select('*').eq('uuid', uid).maybeSingle()
-      if (usr) {
-        setRole('aluno')
-        setPerfil(usr as Usuario)
-        setMeuIdUsuario(myId as number)
-        setMeuIdAdm(null)
-        return
-      }
+    const resultado = data[0]
+
+    if (resultado.tipo_perfil === 'admin') {
+      const { data: adm } = await supabase
+        .from('administradores')
+        .select('*')
+        .eq('uuid', uid)
+        .maybeSingle()
+
+      setRole('admin')
+      setPerfil((adm as Administrador) ?? null)
+      setMeuIdAdm(resultado.id)
+      setMeuIdUsuario(null)
+      return 'admin'
+    }
+
+    if (resultado.tipo_perfil === 'aluno' || resultado.tipo_perfil === 'usuario') {
+      const { data: usr } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('uuid', uid)
+        .maybeSingle()
+
+      setRole('aluno')
+      setPerfil((usr as Usuario) ?? null)
+      setMeuIdUsuario(resultado.id)
+      setMeuIdAdm(null)
+      return 'aluno'
     }
 
     setRole(null)
     setPerfil(null)
     setMeuIdUsuario(null)
     setMeuIdAdm(null)
+    return null
   }
 
   async function refreshPerfil() {
@@ -93,45 +108,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return { error: traduzErro(error.message) }
-    return { error: null }
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { error: traduzErro(error.message), role: null }
+
+    if (!data.user) {
+      return { error: 'Não foi possível obter os dados da sessão.', role: null }
+    }
+
+    const roleResolvida = await resolvePerfil(data.user.id)
+
+    if (!roleResolvida) {
+      await supabase.auth.signOut()
+      return {
+        error: 'Conta autenticada, porém sem registro de perfil (administrador ou usuário) ativo no sistema.',
+        role: null,
+      }
+    }
+
+    return { error: null, role: roleResolvida }
   }
 
-  async function ativarCadastroUsuario(params: { nome: string; email: string; password: string; matricula: string }) {
+  async function ativarCadastroUsuario(params: { email: string; password: string; matricula: string }) {
+    // 1. Valida pré-cadastro se a RPC existir no banco
     const { data: autorizado, error: erroValidacao } = await supabase.rpc('validar_pre_cadastro_usuario', {
       p_email: params.email,
       p_matricula: params.matricula,
     })
-    if (erroValidacao) return { error: erroValidacao.message }
-    if (!autorizado) {
+
+    if (erroValidacao && !erroValidacao.message.includes('function') && !erroValidacao.message.includes('not found')) {
+      return { error: erroValidacao.message }
+    }
+
+    if (autorizado === false) {
       return { error: 'E-mail ou matrícula não autorizados. Peça a um administrador para realizar o seu pré-cadastro.' }
     }
 
+    // 2. Dispara a criação do Auth e aciona o Trigger do banco de dados via opções de metadados
     const { error } = await supabase.auth.signUp({
       email: params.email,
       password: params.password,
-      options: { data: { nome: params.nome, matricula: params.matricula } },
+      options: { data: { matricula: params.matricula } },
     })
+
     if (error) return { error: traduzErro(error.message) }
     return { error: null }
   }
 
-  async function ativarCadastroAdmin(params: { nome: string; email: string; password: string; codigo: string }) {
+  async function ativarCadastroAdmin(params: { email: string; password: string; codigo: string }) {
+    // 1. Valida pré-cadastro se a RPC existir no banco
     const { data: autorizado, error: erroValidacao } = await supabase.rpc('validar_pre_cadastro_admin', {
       p_email: params.email,
       p_codigo: params.codigo,
     })
-    if (erroValidacao) return { error: erroValidacao.message }
-    if (!autorizado) {
+
+    if (erroValidacao && !erroValidacao.message.includes('function') && !erroValidacao.message.includes('not found')) {
+      return { error: erroValidacao.message }
+    }
+
+    if (autorizado === false) {
       return { error: 'E-mail ou código de administrador não autorizados. Peça a outro administrador para realizar o seu pré-cadastro.' }
     }
 
+    // 2. Dispara a criação do Auth e aciona o Trigger do banco de dados via opções de metadados
     const { error } = await supabase.auth.signUp({
       email: params.email,
       password: params.password,
-      options: { data: { nome: params.nome, codigo: params.codigo } },
+      options: { data: { codigo: params.codigo } },
     })
+
     if (error) return { error: traduzErro(error.message) }
     return { error: null }
   }

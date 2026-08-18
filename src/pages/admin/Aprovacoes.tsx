@@ -24,32 +24,45 @@ export function AdminAprovacoes() {
 
   async function carregar() {
     setLoading(true)
-    const [{ data: rs }, { data: re }] = await Promise.all([
+
+    // Busca solicitações pendentes e os nomes dos recursos em paralelo
+    const [resSalas, resEquip, resListaSalas, resListaEquip] = await Promise.all([
       supabase
         .from('reservas_salas')
-        .select('id, inicio, fim, motivo, quantidade_pessoas, salas(nome), usuarios(nome)')
+        .select('id, id_sala, inicio, fim, motivo, quantidade_pessoas, usuarios(nome)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
       supabase
         .from('reservas_equipamentos')
-        .select('id, inicio, fim, observacao, equipamentos(nome), usuarios(nome)')
+        .select('id, id_equipamento, inicio, fim, observacao, usuarios(nome)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
+      supabase.from('salas').select('id_sala, nome'),
+      supabase.from('equipamentos').select('id_equipamento, nome'),
     ])
 
-    const itensSalas: Solicitacao[] = (rs ?? []).map((r: any) => ({
+    // Mapeia IDs para nomes de salas e equipamentos
+    const mapaSalas = new Map<number, string>(
+      (resListaSalas.data ?? []).map((s: any) => [s.id_sala, s.nome])
+    )
+    const mapaEquip = new Map<number, string>(
+      (resListaEquip.data ?? []).map((e: any) => [e.id_equipamento, e.nome])
+    )
+
+    const itensSalas: Solicitacao[] = (resSalas.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'sala',
-      recursoNome: r.salas?.nome ?? 'Sala',
+      recursoNome: mapaSalas.get(r.id_sala) ?? `Sala #${r.id_sala}`,
       usuarioNome: r.usuarios?.nome ?? 'Usuário',
       inicio: r.inicio,
       fim: r.fim,
       detalhe: r.motivo ? `Motivo: ${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : `${r.quantidade_pessoas ?? '—'} pessoa(s)`,
     }))
-    const itensEquip: Solicitacao[] = (re ?? []).map((r: any) => ({
+
+    const itensEquip: Solicitacao[] = (resEquip.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'equipamento',
-      recursoNome: r.equipamentos?.nome ?? 'Equipamento',
+      recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
       usuarioNome: r.usuarios?.nome ?? 'Usuário',
       inicio: r.inicio,
       fim: r.fim,
@@ -81,7 +94,13 @@ export function AdminAprovacoes() {
   async function aprovar(item: Solicitacao) {
     setProcessando(item.id)
     const tabela = item.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
-    const { error } = await supabase.from(tabela).update({ status: 'confirmada', id_adm: meuIdAdm }).eq('id', item.id)
+    
+    // Atualiza status para 'aprovada'
+    const { error } = await supabase
+      .from(tabela)
+      .update({ status: 'aprovada', id_adm: meuIdAdm })
+      .eq('id', item.id)
+
     setProcessando(null)
     if (error) alert('Erro: ' + error.message)
     else carregar()
@@ -91,8 +110,11 @@ export function AdminAprovacoes() {
     if (!rejeitando) return
     setProcessando(rejeitando.id)
     const tabela = rejeitando.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
+    
+    // Atualiza status para 'rejeitada'
     const payload: Record<string, unknown> = { status: 'rejeitada', id_adm: meuIdAdm }
     if (justificativa.trim()) payload.observacao = `Rejeitada: ${justificativa.trim()}`
+    
     const { error } = await supabase.from(tabela).update(payload).eq('id', rejeitando.id)
     setProcessando(null)
     if (error) {

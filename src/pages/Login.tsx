@@ -12,7 +12,6 @@ export function Login() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [nome, setNome] = useState('')
   const [matricula, setMatricula] = useState('')
   const [codigo, setCodigo] = useState('')
 
@@ -29,18 +28,29 @@ export function Login() {
     e.preventDefault()
     limparMensagens()
     setLoading(true)
-    const { error } = await signIn(email, password)
+
+    const { error, role } = await signIn(email, password)
     setLoading(false)
+
     if (error) return setError(error)
-    const dest = (location.state as { from?: string })?.from ?? '/'
-    navigate(dest, { replace: true })
+
+    const normalizedRole = role?.toString().toLowerCase().trim()
+
+    if (normalizedRole === 'admin') {
+      navigate('/admin', { replace: true })
+    } else if (normalizedRole === 'usuario' || normalizedRole === 'usuarios' || normalizedRole === 'aluno') {
+      const dest = (location.state as { from?: string })?.from ?? '/'
+      navigate(dest, { replace: true })
+    } else {
+      setError('Conta autenticada, porém sem registro de perfil (administrador ou usuário) ativo no sistema.')
+    }
   }
 
   async function handleAtivarUsuario(e: FormEvent) {
     e.preventDefault()
     limparMensagens()
     setLoading(true)
-    const { error } = await ativarCadastroUsuario({ nome, email, password, matricula })
+    const { error } = await ativarCadastroUsuario({ email, password, matricula })
     setLoading(false)
     if (error) return setError(error)
     setOk(true)
@@ -50,7 +60,7 @@ export function Login() {
     e.preventDefault()
     limparMensagens()
     setLoading(true)
-    const { error } = await ativarCadastroAdmin({ nome, email, password, codigo })
+    const { error } = await ativarCadastroAdmin({ email, password, codigo })
     setLoading(false)
     if (error) return setError(error)
     setOk(true)
@@ -68,12 +78,13 @@ export function Login() {
           {(
             [
               ['entrar', 'entrar'],
-              ['ativar-usuario', 'ativar (aluno)'],
+              ['ativar-usuario', 'ativar (usuário)'],
               ['ativar-admin', 'ativar (admin)'],
             ] as const
           ).map(([value, label]) => (
             <button
               key={value}
+              type="button"
               onClick={() => {
                 setAba(value)
                 limparMensagens()
@@ -111,9 +122,6 @@ export function Login() {
                 <p className="text-xs text-(--color-ink-soft)">
                   Seu e-mail e matrícula precisam ter sido pré-cadastrados por um administrador antes de ativar o acesso.
                 </p>
-                <Field label="Nome completo">
-                  <input required value={nome} onChange={(e) => setNome(e.target.value)} className="input" placeholder="Seu nome" />
-                </Field>
                 <Field label="E-mail pré-cadastrado">
                   <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="voce@universidade.edu" />
                 </Field>
@@ -141,9 +149,6 @@ export function Login() {
                 <p className="text-xs text-(--color-ink-soft)">
                   Você precisa ter recebido um código de administrador de outro administrador do sistema.
                 </p>
-                <Field label="Nome completo">
-                  <input required value={nome} onChange={(e) => setNome(e.target.value)} className="input" placeholder="Seu nome" />
-                </Field>
                 <Field label="E-mail pré-cadastrado">
                   <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="voce@universidade.edu" />
                 </Field>

@@ -17,8 +17,7 @@ interface Item {
 const FILTROS: { value: 'todas' | StatusReserva; label: string }[] = [
   { value: 'todas', label: 'Todas' },
   { value: 'pendente', label: 'Pendentes' },
-  { value: 'confirmada', label: 'Confirmadas' },
-  { value: 'rejeitada', label: 'Rejeitadas' },
+  { value: 'aprovada', label: 'Aprovadas' },
   { value: 'cancelada', label: 'Canceladas' },
 ]
 
@@ -30,35 +29,68 @@ export function MinhasReservas() {
   const [cancelando, setCancelando] = useState<number | null>(null)
 
   async function carregar() {
-    if (meuIdUsuario === null) return
     setLoading(true)
 
-    const [{ data: rs }, { data: re }] = await Promise.all([
+    let targetUserId = meuIdUsuario
+
+    // Se meuIdUsuario não estiver no context, busca diretamente no banco via Auth
+    if (!targetUserId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: uBD } = await supabase
+          .from('usuarios')
+          .select('id_usuario')
+          .or(`uuid.eq.${user.id},email.eq.${user.email}`)
+          .maybeSingle()
+
+        if (uBD) targetUserId = uBD.id_usuario
+      }
+    }
+
+    // Se mesmo assim não encontrar o ID do usuário, encerra o carregamento
+    if (!targetUserId) {
+      setItens([])
+      setLoading(false)
+      return
+    }
+
+    // Busca as reservas do usuário e os nomes dos recursos em paralelo
+    const [resSalas, resEquip, resListaSalas, resListaEquip] = await Promise.all([
       supabase
         .from('reservas_salas')
-        .select('id, inicio, fim, status, motivo, quantidade_pessoas, salas(nome)')
-        .eq('id_usuario', meuIdUsuario)
+        .select('id, id_sala, inicio, fim, status, motivo, quantidade_pessoas')
+        .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
       supabase
         .from('reservas_equipamentos')
-        .select('id, inicio, fim, status, observacao, equipamentos(nome)')
-        .eq('id_usuario', meuIdUsuario)
+        .select('id, id_equipamento, inicio, fim, status, observacao')
+        .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
+      supabase.from('salas').select('id_sala, nome'),
+      supabase.from('equipamentos').select('id_equipamento, nome'),
     ])
 
-    const itensSalas: Item[] = (rs ?? []).map((r: any) => ({
+    const mapaSalas = new Map<number, string>(
+      (resListaSalas.data ?? []).map((s: any) => [s.id_sala, s.nome])
+    )
+    const mapaEquip = new Map<number, string>(
+      (resListaEquip.data ?? []).map((e: any) => [e.id_equipamento, e.nome])
+    )
+
+    const itensSalas: Item[] = (resSalas.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'sala',
-      recursoNome: r.salas?.nome ?? 'Sala',
+      recursoNome: mapaSalas.get(r.id_sala) ?? `Sala #${r.id_sala}`,
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
       extra: r.motivo ? `${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : undefined,
     }))
-    const itensEquip: Item[] = (re ?? []).map((r: any) => ({
+
+    const itensEquip: Item[] = (resEquip.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'equipamento',
-      recursoNome: r.equipamentos?.nome ?? 'Equipamento',
+      recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
@@ -71,7 +103,6 @@ export function MinhasReservas() {
 
   useEffect(() => {
     carregar()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meuIdUsuario])
 
   async function cancelar(item: Item) {
@@ -116,7 +147,7 @@ export function MinhasReservas() {
         <div className="space-y-3">
           {filtrados.map((item) => {
             const futura = new Date(item.inicio) > agora
-            const podeCancelar = futura && (item.status === 'pendente' || item.status === 'confirmada')
+            const podeCancelar = futura && (item.status === 'pendente' || item.status === 'aprovada')
             return (
               <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-3 p-4">
                 <div>

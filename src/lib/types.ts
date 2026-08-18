@@ -1,5 +1,7 @@
 export type StatusRecurso = 'livre' | 'ocupado' | 'manutencao'
-export type StatusReserva = 'pendente' | 'confirmada' | 'rejeitada' | 'cancelada'
+
+// Atualizado para refletir o novo ENUM do PostgreSQL
+export type StatusReserva = 'pendente' | 'aprovada' | 'cancelada'
 
 export interface Usuario {
   id_usuario: number

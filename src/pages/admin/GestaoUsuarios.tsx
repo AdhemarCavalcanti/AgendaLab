@@ -14,7 +14,6 @@ export function AdminGestaoUsuarios() {
   const [erro, setErro] = useState<string | null>(null)
 
   const [modalAberto, setModalAberto] = useState(false)
-  const [codigoGerado, setCodigoGerado] = useState<{ nome: string; codigo: string } | null>(null)
 
   async function carregar() {
     setLoading(true)
@@ -63,7 +62,9 @@ export function AdminGestaoUsuarios() {
             key={t}
             onClick={() => setAba(t)}
             className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-              aba === t ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
+              aba === t
+                ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
+                : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
             }`}
           >
             {t === 'usuarios' ? 'alunos/pesquisadores' : 'administradores'}
@@ -156,28 +157,11 @@ export function AdminGestaoUsuarios() {
         <PreCadastroForm
           tipo={aba}
           onClose={() => setModalAberto(false)}
-          onCriado={(codigoInfo) => {
+          onCriado={() => {
             setModalAberto(false)
-            if (codigoInfo) setCodigoGerado(codigoInfo)
             carregar()
           }}
         />
-      )}
-
-      {codigoGerado && (
-        <Modal title="Código de administrador gerado" onClose={() => setCodigoGerado(null)}>
-          <div className="space-y-3">
-            <p className="text-sm text-(--color-ink-soft)">
-              Compartilhe este código com <strong>{codigoGerado.nome}</strong> para que ele(a) ative o próprio cadastro na tela de login, aba "ativar (admin)".
-            </p>
-            <div className="rounded-md border border-(--color-cyan)/40 bg-(--color-cyan-soft) p-4 text-center font-mono text-2xl font-bold tracking-widest text-(--color-cyan)">
-              {codigoGerado.codigo}
-            </div>
-            <button className="btn-primary w-full" onClick={() => setCodigoGerado(null)}>
-              entendi
-            </button>
-          </div>
-        </Modal>
       )}
     </div>
   )
@@ -190,13 +174,23 @@ function PreCadastroForm({
 }: {
   tipo: Aba
   onClose: () => void
-  onCriado: (codigoInfo: { nome: string; codigo: string } | null) => void
+  onCriado: () => void
 }) {
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [matricula, setMatricula] = useState('')
+  const [codigoAdmin, setCodigoAdmin] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+
+  function gerarCodigoAleatorio() {
+    const caracteres = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    let resultado = 'ADM-'
+    for (let i = 0; i < 6; i++) {
+      resultado += caracteres.charAt(Math.floor(Math.random() * caracteres.length))
+    }
+    setCodigoAdmin(resultado)
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -211,12 +205,21 @@ function PreCadastroForm({
       })
       setSalvando(false)
       if (error) return setErro(error.message)
-      onCriado(null)
+      onCriado()
     } else {
-      const { data, error } = await supabase.rpc('admin_criar_pre_cadastro_admin', { p_nome: nome, p_email: email })
+      if (!codigoAdmin) {
+        setSalvando(false)
+        return setErro('Por favor, gere um código de verificação para o administrador.')
+      }
+
+      const { error } = await supabase.rpc('admin_criar_pre_cadastro_admin', {
+        p_nome: nome,
+        p_email: email,
+        p_codigo: codigoAdmin,
+      })
       setSalvando(false)
       if (error) return setErro(error.message)
-      onCriado({ nome, codigo: data as string })
+      onCriado()
     }
   }
 
@@ -238,12 +241,30 @@ function PreCadastroForm({
           </label>
         )}
         {tipo === 'administradores' && (
-          <p className="text-xs text-(--color-ink-soft)">Um código de ativação único será gerado automaticamente após salvar.</p>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium">Código de ativação do Admin</span>
+            <div className="flex gap-2">
+              <input
+                required
+                readOnly
+                value={codigoAdmin}
+                className="input font-mono font-bold uppercase tracking-wider bg-black/5"
+                placeholder="Clique ao lado para gerar"
+              />
+              <button
+                type="button"
+                onClick={gerarCodigoAleatorio}
+                className="btn-secondary whitespace-nowrap text-xs font-semibold"
+              >
+                {codigoAdmin ? 'Gerar Outro' : 'Gerar Código'}
+              </button>
+            </div>
+          </label>
         )}
 
         {erro && <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">{erro}</p>}
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={salvando}>
             cancelar
           </button>
