@@ -36,9 +36,11 @@ export function Login() {
 
     const normalizedRole = role?.toString().toLowerCase().trim()
 
-    if (normalizedRole === 'admin') {
-      navigate('/admin', { replace: true })
-    } else if (normalizedRole === 'usuario' || normalizedRole === 'usuarios' || normalizedRole === 'aluno') {
+    // Verifica se possui um perfil válido no sistema
+    const isPerfilValido = ['admin', 'usuario', 'usuarios', 'aluno'].includes(normalizedRole ?? '')
+
+    if (isPerfilValido) {
+      // Tanto admin quanto usuário vão para o catálogo (ou rota 'from' salva)
       const dest = (location.state as { from?: string })?.from ?? '/'
       navigate(dest, { replace: true })
     } else {
