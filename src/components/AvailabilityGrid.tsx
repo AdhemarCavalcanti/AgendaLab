@@ -12,7 +12,7 @@ interface Props {
   ocupacoes: Ocupacao[]
   startHour?: number
   endHour?: number
-  onConfirmSelection: (inicio: Date, fim: Date) => void
+  onConfirmSelection?: (inicio: Date, fim: Date) => void // <-- Opcional para não dar erro com admins
   disabled?: boolean
 }
 
@@ -46,11 +46,9 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
       const oStart = o.inicio instanceof Date ? o.inicio : new Date(o.inicio)
       const oEnd = o.fim instanceof Date ? o.fim : new Date(o.fim)
 
-      // Checa sobreposição de horários usando marcas de tempo numéricas absolutas (.getTime)
       if (slotStart.getTime() < oEnd.getTime() && slotEnd.getTime() > oStart.getTime()) {
         const st = o.status.toLowerCase()
         if (st === 'pendente') return { kind: 'pendente', mine: o.mine }
-        // Suporta tanto 'aprovada' (usado no seu banco) quanto 'confirmada'
         if (st === 'aprovada' || st === 'confirmada') return { kind: 'aprovada', mine: o.mine }
       }
     }
@@ -58,14 +56,13 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
   }
 
   function toggleHour(hour: number) {
-    if (disabled) return
+    if (disabled || !onConfirmSelection) return // Bloqueia seleção se não houver callback (ex: perfis admin)
     const st = statusOfHour(hour)
     if (st.kind !== 'livre') return
 
     setSelected((prev) => {
       if (prev.includes(hour)) return prev.filter((h) => h !== hour)
       const next = [...prev, hour].sort((a, b) => a - b)
-      // Mantém apenas o bloco contínuo de horários selecionados pelo usuário
       const idx = next.indexOf(hour)
       let lo = idx
       while (lo > 0 && next[lo - 1] === next[lo] - 1) lo--
@@ -95,6 +92,8 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
         {hours.map((h) => {
           const st = statusOfHour(h)
           const isSelected = selected.includes(h)
+          const podeSelecionar = !!onConfirmSelection && !disabled
+
           let cls =
             'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono'
           if (st.kind === 'passado') {
@@ -106,14 +105,14 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
           } else if (isSelected) {
             cls += ' border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) ring-2 ring-(--color-cyan)/40 cursor-pointer'
           } else {
-            cls += ' border-dashed border-(--color-cyan)/50 text-(--color-ink) hover:bg-(--color-cyan-soft)/60 cursor-pointer'
+            cls += ` border-dashed border-(--color-cyan)/50 text-(--color-ink) ${podeSelecionar ? 'hover:bg-(--color-cyan-soft)/60 cursor-pointer' : 'cursor-default'}`
           }
 
           return (
             <button
               type="button"
               key={h}
-              disabled={disabled || st.kind === 'passado' || st.kind === 'aprovada' || st.kind === 'pendente'}
+              disabled={disabled || !podeSelecionar || st.kind === 'passado' || st.kind === 'aprovada' || st.kind === 'pendente'}
               onClick={() => toggleHour(h)}
               className={cls}
             >
@@ -129,7 +128,7 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
         })}
       </div>
 
-      {selected.length > 0 && min !== null && max !== null && (
+      {selected.length > 0 && min !== null && max !== null && onConfirmSelection && (
         <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-md border border-(--color-cyan)/40 bg-(--color-cyan-soft) p-3 sm:flex-row sm:items-center">
           <p className="font-mono text-sm text-(--color-cyan)">
             selecionado: {hourLabel(min)} → {hourLabel(max + 1)}

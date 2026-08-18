@@ -164,6 +164,7 @@ export function RecursoAgenda() {
 
     setSucesso(true)
     await carregarOcupacoes()
+    await carregarRecurso()
     setTimeout(() => {
       setPendingSlot(null)
       setSucesso(false)
@@ -178,7 +179,10 @@ export function RecursoAgenda() {
 
   const nome = recurso.nome
   const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Quantidade: ${(recurso as Equipamento).quantidade}`
-  const indisponivel = recurso.status !== 'livre'
+  
+  // Valida indisponibilidade comum e equipamento com quantidade zerada
+  const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
+  const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
@@ -192,23 +196,27 @@ export function RecursoAgenda() {
           <h1 className="font-display text-3xl font-bold">{nome}</h1>
           <p className="mt-1 text-(--color-ink-soft)">{detalhe}</p>
         </div>
-        <StatusBadge status={recurso.status} tipo="recurso" />
+        <StatusBadge status={equipamentoSemEstoque ? 'ocupado' : recurso.status} tipo="recurso" />
       </div>
 
       {indisponivel ? (
         <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-4 text-sm text-(--color-coral)">
-          {STATUS_MSG[recurso.status] ?? 'Este recurso não está disponível para reservas no momento.'}
+          {equipamentoSemEstoque
+            ? 'Todos os equipamentos estão ocupados.'
+            : STATUS_MSG[recurso.status] ?? 'Este recurso não está disponível para reservas no momento.'}
         </p>
       ) : !user ? (
         <p className="rounded-md border border-(--color-border) bg-(--color-surface) p-4 text-sm text-(--color-ink-soft)">
           <a href="/login" className="font-medium text-(--color-cyan) hover:underline">Entre na sua conta</a> para solicitar uma reserva.
         </p>
-      ) : role !== 'aluno' ? (
-        <p className="rounded-md border border-(--color-amber)/30 bg-(--color-amber-soft) p-4 text-sm text-(--color-amber)">
-          Reservas são solicitadas pelo perfil Aluno/Pesquisador.
-        </p>
       ) : (
         <>
+          {role === 'admin' && (
+            <div className="mb-4 rounded-md border border-(--color-cyan)/30 bg-(--color-cyan-soft) p-3 text-xs text-(--color-cyan)">
+              Modo de visualização administrativa. Apenas alunos/pesquisadores podem realizar solicitações de reserva.
+            </div>
+          )}
+
           <div className="mb-4 flex gap-2 overflow-x-auto scrollbar-thin pb-2">
             {dias.map((d) => {
               const ativo = d.toDateString() === selectedDate.toDateString()
@@ -227,7 +235,11 @@ export function RecursoAgenda() {
             })}
           </div>
 
-          <AvailabilityGrid date={selectedDate} ocupacoes={ocupacoes} onConfirmSelection={abrirConfirmacao} />
+          <AvailabilityGrid
+            date={selectedDate}
+            ocupacoes={ocupacoes}
+            onConfirmSelection={role === 'aluno' ? abrirConfirmacao : undefined}
+          />
         </>
       )}
 
