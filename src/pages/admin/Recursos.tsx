@@ -82,27 +82,24 @@ export function AdminRecursos() {
       novaQtd = qtdAtual - qtdManutencaoInput
       novaQtdManutencao = qtdManutencaoAtual + qtdManutencaoInput
     } else {
+      // TRAVA DE SEGURANÇA: Impede devolução superior à quantidade que está em manutenção
+      if (qtdManutencaoInput > qtdManutencaoAtual) {
+        alert(`A quantidade a retornar (${qtdManutencaoInput}) não pode ser maior do que a quantidade em manutenção (${qtdManutencaoAtual}).`)
+        return
+      }
       novaQtd = qtdAtual + qtdManutencaoInput
       novaQtdManutencao = Math.max(0, qtdManutencaoAtual - qtdManutencaoInput)
     }
 
-    // Define status global
-    let novoStatus: StatusRecurso = 'livre'
-    if (novaQtd === 0 && novaQtdManutencao > 0) {
-      novoStatus = 'manutencao'
-    } else if (item.status === 'manutencao' && novaQtd > 0) {
-      novoStatus = 'livre'
-    } else {
-      novoStatus = item.status
-    }
-
     setEnviandoManutencao(true)
+    
+    // A TRIGGER trg_validar_e_ajustar_manutencao_equipamento no PostgreSQL
+    // atualiza o campo status automaticamente ao salvar a requisição.
     const { error } = await supabase
       .from('equipamentos')
       .update({
         quantidade: novaQtd,
         quantidade_manutencao: novaQtdManutencao,
-        status: novoStatus,
       })
       .eq('id', item.id)
 
@@ -285,7 +282,7 @@ export function AdminRecursos() {
                 max={
                   equipamentoManutencao.acao === 'entrar'
                     ? equipamentoManutencao.item.quantidade
-                    : undefined
+                    : (equipamentoManutencao.item.quantidade_manutencao ?? 0) // Limita a entrada até a quantidade atual em manutenção
                 }
                 value={qtdManutencaoInput}
                 onChange={(e) => setQtdManutencaoInput(Number(e.target.value))}
