@@ -14,6 +14,7 @@ interface Solicitacao {
   fim: string
   status: 'aprovada' | 'pendente' | 'cancelada'
   status_devolucao?: 'pendente' | 'devolvido'
+  quantidade?: number
   detalhe?: string
 }
 
@@ -39,17 +40,17 @@ export function AdminAprovacoes() {
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
 
-      // 2. Equipamentos pendentes de aprovação (incluído "motivo")
+      // 2. Equipamentos pendentes de aprovação
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, motivo, observacao, status, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, inicio, fim, motivo, observacao, quantidade, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
 
       // 3. Equipamentos APROVADOS que ainda estão PENDENTES DE DEVOLUÇÃO
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, observacao, status, status_devolucao, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, inicio, fim, observacao, quantidade, status, status_devolucao, usuarios(nome, email, matricula)')
         .eq('status', 'aprovada')
         .eq('status_devolucao', 'pendente')
         .order('inicio', { ascending: true }),
@@ -88,7 +89,8 @@ export function AdminAprovacoes() {
       inicio: r.inicio,
       fim: r.fim,
       status: r.status,
-      detalhe: r.motivo ? `Motivo: ${r.motivo}` : r.observacao ?? undefined,
+      quantidade: r.quantidade ?? 1,
+      detalhe: r.motivo ? `Motivo: ${r.motivo} · Quantidade: ${r.quantidade ?? 1}` : `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
     }))
 
     const devolucoesEquip: Solicitacao[] = (resDevolucoes.data ?? []).map((r: any) => ({
@@ -102,7 +104,8 @@ export function AdminAprovacoes() {
       fim: r.fim,
       status: r.status,
       status_devolucao: r.status_devolucao,
-      detalhe: r.observacao ?? undefined,
+      quantidade: r.quantidade ?? 1,
+      detalhe: `Quantidade retirada: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
     }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime()))
@@ -131,7 +134,6 @@ export function AdminAprovacoes() {
     setProcessando(item.id)
     const tabela = item.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
     
-    // Ao aprovar equipamento, garante que o status_devolucao inicie como 'pendente'
     const payloadUpdate = item.tipo === 'equipamento' 
       ? { status: 'aprovada', status_devolucao: 'pendente', id_adm: meuIdAdm }
       : { status: 'aprovada', id_adm: meuIdAdm }
@@ -150,7 +152,6 @@ export function AdminAprovacoes() {
     setProcessando(item.id)
     
     try {
-      // Grava 'devolvido' na coluna status_devolucao
       const { data, error } = await supabase
         .from('reservas_equipamentos')
         .update({ 
@@ -189,8 +190,12 @@ export function AdminAprovacoes() {
       status: 'cancelada', 
       id_adm: meuIdAdm 
     }
+
+    // Se for cancelamento de equipamento, define status_devolucao como 'devolvido'
+    if (rejeitando.tipo === 'equipamento') {
+      payload.status_devolucao = 'devolvido'
+    }
     
-    // Agora ambas as tabelas (salas e equipamentos) gravam na coluna 'motivo'
     if (justificativa.trim()) {
       payload.motivo = justificativa.trim()
     }
