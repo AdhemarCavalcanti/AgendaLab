@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom' // ✅ Correto
+import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
@@ -22,6 +22,7 @@ function proximosDias(n: number) {
 const STATUS_MSG: Record<string, string> = {
   ocupado: 'Este recurso está marcado como ocupado pelo administrador e não pode ser reservado no momento.',
   manutencao: 'Este recurso está em manutenção e não pode ser reservado no momento.',
+  manutenção: 'Este recurso está em manutenção e não pode ser reservado no momento.',
 }
 
 export function RecursoAgenda() {
@@ -229,6 +230,7 @@ export function RecursoAgenda() {
   const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Estoque total: ${(recurso as Equipamento).quantidade}`
 
   const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
+  const statusAtual = equipamentoSemEstoque ? 'manutenção' : recurso.status
   const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
 
   return (
@@ -243,7 +245,7 @@ export function RecursoAgenda() {
           <h1 className="font-display text-3xl font-bold">{nome}</h1>
           <p className="mt-1 text-(--color-ink-soft)">{detalhe}</p>
         </div>
-        <StatusBadge status={equipamentoSemEstoque ? 'ocupado' : recurso.status} tipo="recurso" />
+        <StatusBadge status={statusAtual} tipo="recurso" />
       </div>
 
       {recurso.regras_uso && (
@@ -260,7 +262,7 @@ export function RecursoAgenda() {
       {indisponivel ? (
         <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-4 text-sm text-(--color-coral)">
           {equipamentoSemEstoque
-            ? 'Todos os equipamentos estão ocupados.'
+            ? 'Este recurso está em manutenção e não pode ser reservado no momento.'
             : STATUS_MSG[recurso.status] ?? 'Este recurso não está disponível para reservas no momento.'}
         </p>
       ) : !user ? (
