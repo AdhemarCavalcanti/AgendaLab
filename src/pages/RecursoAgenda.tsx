@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom' // ✅ Correto
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
@@ -38,6 +38,7 @@ export function RecursoAgenda() {
   const [pendingSlot, setPendingSlot] = useState<{ inicio: Date; fim: Date } | null>(null)
   const [motivo, setMotivo] = useState('')
   const [qtdPessoas, setQtdPessoas] = useState(1)
+  const [qtdEquipamento, setQtdEquipamento] = useState(1)
   const [observacao, setObservacao] = useState('')
   const [enviando, setEnviando] = useState(false)
   const [formErro, setFormErro] = useState<string | null>(null)
@@ -74,23 +75,26 @@ export function RecursoAgenda() {
     fimJanela.setDate(fimJanela.getDate() + 2)
     fimJanela.setHours(23, 59, 59, 999)
 
+    const selectFields = tipo === 'equipamento' ? 'inicio, fim, status, id_usuario, quantidade' : 'inicio, fim, status, id_usuario'
+
     const { data, error } = await supabase
       .from(tabela)
-      .select('inicio, fim, status, id_usuario')
+      .select(selectFields)
       .eq(coluna, idNum)
       .in('status', ['pendente', 'aprovada'])
       .gte('inicio', inicioJanela.toISOString())
       .lte('inicio', fimJanela.toISOString())
 
     if (!error && data) {
-      setOcupacoes(
-        data.map((o) => ({
-          inicio: o.inicio,
-          fim: o.fim,
-          status: o.status,
-          mine: o.id_usuario === meuIdUsuario,
-        })) as unknown as Ocupacao[]
-      )
+      const listaFormatada: Ocupacao[] = (data as any[]).map((o) => ({
+        inicio: o.inicio,
+        fim: o.fim,
+        status: o.status,
+        mine: o.id_usuario === meuIdUsuario,
+        quantidade: o.quantidade ? Number(o.quantidade) : 1,
+      }))
+
+      setOcupacoes(listaFormatada)
     }
   }
 
@@ -102,9 +106,42 @@ export function RecursoAgenda() {
     carregarOcupacoes()
   }, [tipo, id, selectedDate])
 
+  const estoqueTotal = tipo === 'equipamento' ? (recurso as Equipamento)?.quantidade ?? 0 : 0
+
+  const disponivelNoSlot = useMemo(() => {
+    if (!pendingSlot || tipo !== 'equipamento' || !estoqueTotal) return 0
+
+    const inicioSlot = pendingSlot.inicio.getTime()
+    const fimSlot = pendingSlot.fim.getTime()
+
+    let maxUsoNoIntervalo = 0
+
+    for (let t = inicioSlot; t < fimSlot; t += 3600000) {
+      const horaInicio = t
+      const horaFim = t + 3600000
+
+      const usoNestaHora = ocupacoes.reduce((acc, o) => {
+        const oStart = new Date(o.inicio).getTime()
+        const oEnd = new Date(o.fim).getTime()
+
+        if (horaInicio < oEnd && horaFim > oStart) {
+          return acc + (o.quantidade ?? 1)
+        }
+        return acc
+      }, 0)
+
+      if (usoNestaHora > maxUsoNoIntervalo) {
+        maxUsoNoIntervalo = usoNestaHora
+      }
+    }
+
+    return Math.max(0, estoqueTotal - maxUsoNoIntervalo)
+  }, [pendingSlot, ocupacoes, tipo, estoqueTotal])
+
   function abrirConfirmacao(inicio: Date, fim: Date) {
     setFormErro(null)
     setQtdPessoas(1)
+    setQtdEquipamento(1)
     setPendingSlot({ inicio, fim })
   }
 
@@ -116,22 +153,29 @@ export function RecursoAgenda() {
       return
     }
 
+    if (tipo === 'equipamento' && qtdEquipamento > disponivelNoSlot) {
+      setFormErro(`A quantidade solicitada (${qtdEquipamento}) excede o estoque disponível para este horário (${disponivelNoSlot}).`)
+      return
+    }
+
     setEnviando(true)
     setFormErro(null)
 
-    const { data: conflitos } = await supabase
-      .from(tabela)
-      .select('id')
-      .eq(coluna, idNum)
-      .in('status', ['pendente', 'aprovada'])
-      .lt('inicio', pendingSlot.fim.toISOString())
-      .gt('fim', pendingSlot.inicio.toISOString())
+    if (tipo === 'sala') {
+      const { data: conflitos } = await supabase
+        .from(tabela)
+        .select('id')
+        .eq(coluna, idNum)
+        .in('status', ['pendente', 'aprovada'])
+        .lt('inicio', pendingSlot.fim.toISOString())
+        .gt('fim', pendingSlot.inicio.toISOString())
 
-    if (conflitos && conflitos.length > 0) {
-      setFormErro('Horário reservado recentemente por outro usuário. Escolha outro horário.')
-      setEnviando(false)
-      await carregarOcupacoes()
-      return
+      if (conflitos && conflitos.length > 0) {
+        setFormErro('Horário reservado recentemente por outro usuário. Escolha outro horário.')
+        setEnviando(false)
+        await carregarOcupacoes()
+        return
+      }
     }
 
     const payload: Record<string, unknown> = {
@@ -147,6 +191,7 @@ export function RecursoAgenda() {
       payload.quantidade_pessoas = qtdPessoas
       payload.observacao = observacao || null
     } else {
+      payload.quantidade = qtdEquipamento
       payload.observacao = observacao || null
       payload.status_devolucao = 'pendente'
     }
@@ -156,7 +201,7 @@ export function RecursoAgenda() {
 
     if (error) {
       if (error.code === '23P01' || error.message.toLowerCase().includes('exclu')) {
-        setFormErro('Horário reservado recentemente por outro usuário. Escolha outro horário.')
+        setFormErro('Horário reservado recentemente por outro usuário ou estoque esgotado.')
       } else {
         setFormErro(error.message)
       }
@@ -173,6 +218,7 @@ export function RecursoAgenda() {
       setMotivo('')
       setObservacao('')
       setQtdPessoas(1)
+      setQtdEquipamento(1)
     }, 1600)
   }
 
@@ -180,7 +226,7 @@ export function RecursoAgenda() {
   if (erro || !recurso) return <p className="mx-auto max-w-6xl px-4 py-10 text-(--color-coral)">{erro}</p>
 
   const nome = recurso.nome
-  const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Quantidade: ${(recurso as Equipamento).quantidade}`
+  const detalhe = tipo === 'sala' ? `Capacidade: ${(recurso as Sala).lotacao} pessoas` : `Estoque total: ${(recurso as Equipamento).quantidade}`
 
   const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
   const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
@@ -200,7 +246,6 @@ export function RecursoAgenda() {
         <StatusBadge status={equipamentoSemEstoque ? 'ocupado' : recurso.status} tipo="recurso" />
       </div>
 
-      {/* Regras de Uso - Exibidas antes das regras de agenda/horários */}
       {recurso.regras_uso && (
         <div className="mb-8 rounded-lg border border-(--color-border) bg-black/5 p-4">
           <h3 className="mb-1 font-mono text-xs font-semibold uppercase tracking-wider text-(--color-cyan)">
@@ -251,6 +296,8 @@ export function RecursoAgenda() {
           <AvailabilityGrid
             date={selectedDate}
             ocupacoes={ocupacoes}
+            totalEstoque={tipo === 'equipamento' ? (recurso as Equipamento).quantidade : 1}
+            isEquipamento={tipo === 'equipamento'}
             onConfirmSelection={role === 'aluno' ? abrirConfirmacao : undefined}
           />
         </>
@@ -295,6 +342,25 @@ export function RecursoAgenda() {
                 </>
               )}
 
+              {tipo === 'equipamento' && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium">
+                    Quantidade a reservar <span className="font-mono text-xs text-(--color-ink-soft)">(Disponível neste horário: {disponivelNoSlot} de {estoqueTotal})</span>
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={disponivelNoSlot}
+                    value={qtdEquipamento}
+                    onChange={(e) => setQtdEquipamento(Number(e.target.value))}
+                    className="input"
+                  />
+                  {qtdEquipamento > disponivelNoSlot && (
+                    <span className="mt-1 block text-xs text-(--color-coral)">Excede a quantidade disponível para este intervalo de horário.</span>
+                  )}
+                </label>
+              )}
+
               <label className="block">
                 <span className="mb-1 block text-sm font-medium">Observações (opcional)</span>
                 <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} className="input" rows={2} />
@@ -313,7 +379,11 @@ export function RecursoAgenda() {
                 <button
                   className="btn-primary"
                   onClick={confirmarReserva}
-                  disabled={enviando || (tipo === 'sala' && qtdPessoas > (recurso as Sala).lotacao)}
+                  disabled={
+                    enviando ||
+                    (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || qtdPessoas < 1)) ||
+                    (tipo === 'equipamento' && (disponivelNoSlot <= 0 || qtdEquipamento > disponivelNoSlot || qtdEquipamento < 1))
+                  }
                 >
                   {enviando ? 'enviando…' : 'confirmar solicitação'}
                 </button>
