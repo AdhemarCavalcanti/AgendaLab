@@ -1,51 +1,285 @@
-table_schema,table_name,column_name,data_type,is_nullable,column_default
-private,pre_administradores,id_adm,bigint,NO,null
-private,pre_administradores,nome,text,NO,null
-private,pre_administradores,email,text,NO,null
-private,pre_administradores,codigo,text,NO,null
-private,pre_administradores,criado_em,timestamp with time zone,YES,now()
-private,pre_usuarios,id,bigint,NO,null
-private,pre_usuarios,nome,text,NO,null
-private,pre_usuarios,email,text,NO,null
-private,pre_usuarios,matricula,text,NO,null
-private,pre_usuarios,criado_em,timestamp with time zone,YES,now()
-public,administradores,id_adm,bigint,NO,null
-public,administradores,uuid,uuid,YES,null
-public,administradores,nome,text,NO,null
-public,administradores,email,text,NO,null
-public,administradores,codigo,text,YES,null
-public,equipamentos,id,bigint,NO,null
-public,equipamentos,nome,text,NO,null
-public,equipamentos,quantidade,integer,NO,null
-public,equipamentos,status,USER-DEFINED,NO,'livre'::status_recurso
-public,equipamentos,regras_uso,text,YES,null
-public,reservas_equipamentos,id,bigint,NO,null
-public,reservas_equipamentos,id_usuario,bigint,NO,null
-public,reservas_equipamentos,id_equipamento,bigint,NO,null
-public,reservas_equipamentos,id_adm,bigint,YES,null
-public,reservas_equipamentos,inicio,timestamp with time zone,NO,null
-public,reservas_equipamentos,fim,timestamp with time zone,NO,null
-public,reservas_equipamentos,status,USER-DEFINED,NO,'pendente'::status_reserva
-public,reservas_equipamentos,observacao,text,YES,null
-public,reservas_equipamentos,status_devolucao,USER-DEFINED,NO,'pendente'::status_devolucao
-public,reservas_equipamentos,motivo,text,YES,null
-public,reservas_salas,id,bigint,NO,null
-public,reservas_salas,id_usuario,bigint,NO,null
-public,reservas_salas,id_sala,bigint,NO,null
-public,reservas_salas,id_adm,bigint,YES,null
-public,reservas_salas,inicio,timestamp with time zone,NO,null
-public,reservas_salas,fim,timestamp with time zone,NO,null
-public,reservas_salas,status,USER-DEFINED,NO,'pendente'::status_reserva
-public,reservas_salas,motivo,text,YES,null
-public,reservas_salas,quantidade_pessoas,integer,YES,null
-public,reservas_salas,observacao,text,YES,null
-public,salas,id_sala,bigint,NO,null
-public,salas,nome,text,NO,null
-public,salas,lotacao,integer,NO,null
-public,salas,status,USER-DEFINED,NO,'livre'::status_recurso
-public,salas,regras_uso,text,YES,null
-public,usuarios,id_usuario,bigint,NO,null
-public,usuarios,uuid,uuid,YES,null
-public,usuarios,nome,text,NO,null
-public,usuarios,email,text,NO,null
-public,usuarios,matricula,text,YES,null
+schema,tabela,posicao,coluna,tipo,tipo_interno,permite_nulo,valor_padrao
+private,pre_administradores,1,id_adm,bigint,int8,NO,null
+private,pre_administradores,2,nome,text,text,NO,null
+private,pre_administradores,3,email,text,text,NO,null
+private,pre_administradores,4,codigo,text,text,NO,null
+private,pre_administradores,5,criado_em,timestamp with time zone,timestamptz,YES,now()
+private,pre_usuarios,1,id,bigint,int8,NO,null
+private,pre_usuarios,2,nome,text,text,NO,null
+private,pre_usuarios,3,email,text,text,NO,null
+private,pre_usuarios,4,matricula,text,text,NO,null
+private,pre_usuarios,5,criado_em,timestamp with time zone,timestamptz,YES,now()
+public,administradores,1,id_adm,bigint,int8,NO,null
+public,administradores,2,uuid,uuid,uuid,YES,null
+public,administradores,3,nome,text,text,NO,null
+public,administradores,4,email,text,text,NO,null
+public,administradores,5,codigo,text,text,YES,null
+public,equipamentos,1,id,bigint,int8,NO,null
+public,equipamentos,2,nome,text,text,NO,null
+public,equipamentos,3,quantidade,integer,int4,NO,null
+public,equipamentos,4,status,USER-DEFINED,status_recurso,NO,'livre'::status_recurso
+public,equipamentos,5,regras_uso,text,text,YES,null
+public,equipamentos,6,quantidade_manutencao,integer,int4,NO,0
+public,reservas_equipamentos,1,id,bigint,int8,NO,null
+public,reservas_equipamentos,2,id_usuario,bigint,int8,NO,null
+public,reservas_equipamentos,3,id_equipamento,bigint,int8,NO,null
+public,reservas_equipamentos,4,id_adm,bigint,int8,YES,null
+public,reservas_equipamentos,5,inicio,timestamp with time zone,timestamptz,NO,null
+public,reservas_equipamentos,6,fim,timestamp with time zone,timestamptz,NO,null
+public,reservas_equipamentos,7,status,USER-DEFINED,status_reserva,NO,'pendente'::status_reserva
+public,reservas_equipamentos,8,observacao,text,text,YES,null
+public,reservas_equipamentos,9,status_devolucao,USER-DEFINED,status_devolucao,NO,'pendente'::status_devolucao
+public,reservas_equipamentos,10,motivo,text,text,YES,null
+public,reservas_equipamentos,12,quantidade,integer,int4,YES,null
+public,reservas_salas,1,id,bigint,int8,NO,null
+public,reservas_salas,2,id_usuario,bigint,int8,NO,null
+public,reservas_salas,3,id_sala,bigint,int8,NO,null
+public,reservas_salas,4,id_adm,bigint,int8,YES,null
+public,reservas_salas,5,inicio,timestamp with time zone,timestamptz,NO,null
+public,reservas_salas,6,fim,timestamp with time zone,timestamptz,NO,null
+public,reservas_salas,7,status,USER-DEFINED,status_reserva,NO,'pendente'::status_reserva
+public,reservas_salas,8,motivo,text,text,YES,null
+public,reservas_salas,9,quantidade_pessoas,integer,int4,YES,null
+public,reservas_salas,10,observacao,text,text,YES,null
+public,salas,1,id_sala,bigint,int8,NO,null
+public,salas,2,nome,text,text,NO,null
+public,salas,3,lotacao,integer,int4,NO,null
+public,salas,4,status,USER-DEFINED,status_recurso,NO,'livre'::status_recurso
+public,salas,5,regras_uso,text,text,YES,null
+public,usuarios,1,id_usuario,bigint,int8,NO,null
+public,usuarios,2,uuid,uuid,uuid,YES,null
+public,usuarios,3,nome,text,text,NO,null
+public,usuarios,4,email,text,text,NO,null
+public,usuarios,5,matricula,text,text,YES,null
+
+
+
+schema,nome_enum,constante,ordem
+public,status_devolucao,pendente,1
+public,status_devolucao,devolvido,2
+public,status_recurso,livre,1
+public,status_recurso,ocupado,2
+public,status_recurso,manutencao,3
+public,status_reserva,pendente,1
+public,status_reserva,aprovada,2
+public,status_reserva,cancelada,3
+
+
+
+
+schema,nome_funcao,argumentos,retorno,codigo_fonte
+public,admin_cancelar_pre_cadastro,"p_tipo text, p_email text",void,"CREATE OR REPLACE FUNCTION public.admin_cancelar_pre_cadastro(p_tipo text, p_email text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF p_tipo = 'usuario' THEN
+    DELETE FROM public.usuarios 
+    WHERE email = p_email AND uuid IS NULL;
+  ELSIF p_tipo = 'administrador' THEN
+    DELETE FROM public.administradores 
+    WHERE email = p_email AND uuid IS NULL;
+  END IF;
+END;
+$function$
+"
+public,admin_criar_pre_cadastro_admin,"p_nome text, p_email text, p_codigo text",void,"CREATE OR REPLACE FUNCTION public.admin_criar_pre_cadastro_admin(p_nome text, p_email text, p_codigo text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  -- Insere diretamente na tabela correta (administradores)
+  INSERT INTO public.administradores (nome, email, codigo)
+  VALUES (p_nome, lower(trim(p_email)), upper(trim(p_codigo)));
+END;
+$function$
+"
+public,admin_criar_pre_cadastro_usuario,"p_nome text, p_email text, p_matricula text",void,"CREATE OR REPLACE FUNCTION public.admin_criar_pre_cadastro_usuario(p_nome text, p_email text, p_matricula text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  INSERT INTO public.usuarios (nome, email, matricula)
+  VALUES (p_nome, p_email, p_matricula);
+END;
+$function$
+"
+public,admin_listar_pre_cadastros,,"TABLE(tipo text, nome text, email text, identificador text)","CREATE OR REPLACE FUNCTION public.admin_listar_pre_cadastros()
+ RETURNS TABLE(tipo text, nome text, email text, identificador text)
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  -- Busca pré-cadastros de Usuários/Alunos pendentes
+  SELECT 
+    'usuario'::text AS tipo,
+    u.nome,
+    u.email,
+    u.matricula AS identificador
+  FROM public.usuarios u
+  WHERE u.uuid IS NULL
+
+  UNION ALL
+
+  -- Busca pré-cadastros de Administradores pendentes
+  SELECT 
+    'administrador'::text AS tipo,
+    a.nome,
+    a.email,
+    a.codigo AS identificador
+  FROM public.administradores a
+  WHERE a.uuid IS NULL;
+END;
+$function$
+"
+public,decrementar_equipamento_reserva,,trigger,"CREATE OR REPLACE FUNCTION public.decrementar_equipamento_reserva()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  -- Tenta decrementar a quantidade solicitada
+  UPDATE public.equipamentos
+  SET quantidade = quantidade - NEW.quantidade
+  WHERE id = NEW.id_equipamento AND quantidade >= NEW.quantidade;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Quantidade de equipamentos indisponível no momento.';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+"
+public,incrementar_equipamento_devolucao,,trigger,"CREATE OR REPLACE FUNCTION public.incrementar_equipamento_devolucao()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  -- Recompõe o estoque se a reserva for CANCELADA ou devolvida
+  IF (
+    (NEW.status = 'cancelada' AND OLD.status != 'cancelada') OR
+    (NEW.status_devolucao = 'devolvido' AND OLD.status_devolucao != 'devolvido')
+  ) THEN
+    UPDATE public.equipamentos
+    SET quantidade = quantidade + OLD.quantidade
+    WHERE id = NEW.id_equipamento;
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+"
+public,obter_perfil_usuario,p_uuid uuid,"TABLE(tipo_perfil text, id bigint, nome text, email text)","CREATE OR REPLACE FUNCTION public.obter_perfil_usuario(p_uuid uuid)
+ RETURNS TABLE(tipo_perfil text, id bigint, nome text, email text)
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  -- Impede consulta de perfis de terceiros
+  IF auth.uid() IS NULL OR auth.uid() <> p_uuid THEN
+    RAISE EXCEPTION 'Acesso negado: você só pode consultar seu próprio perfil.';
+  END IF;
+
+  -- Busca na tabela administradores
+  RETURN QUERY
+  SELECT 'admin'::text, a.id_adm, a.nome, a.email
+  FROM public.administradores a
+  WHERE a.uuid = p_uuid;
+
+  IF FOUND THEN
+    RETURN;
+  END IF;
+
+  -- Busca na tabela usuarios
+  RETURN QUERY
+  SELECT 'aluno'::text, u.id_usuario, u.nome, u.email
+  FROM public.usuarios u
+  WHERE u.uuid = p_uuid;
+
+  RETURN;
+END;
+$function$
+"
+public,redefinir_senha_exemplo,user_email text,void,"CREATE OR REPLACE FUNCTION public.redefinir_senha_exemplo(user_email text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  -- Lógica executada dentro do banco de dados SQL
+  RAISE NOTICE 'Iniciando processo para %', user_email;
+END;
+$function$
+"
+public,trg_validar_e_ajustar_manutencao_equipamento,,trigger,"CREATE OR REPLACE FUNCTION public.trg_validar_e_ajustar_manutencao_equipamento()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+BEGIN
+  -- Garante valor 0 para quantidade_manutencao caso seja NULL
+  NEW.quantidade_manutencao := COALESCE(NEW.quantidade_manutencao, 0);
+
+  -- Regra Automática de Status:
+  -- Se o estoque disponível zerar e houver itens em manutenção, força o status para 'manutencao'
+  IF NEW.quantidade = 0 AND NEW.quantidade_manutencao > 0 THEN
+    NEW.status := 'manutencao';
+  -- Se o status era 'manutencao' mas voltou a ter estoque livre, força o status para 'livre'
+  ELSIF NEW.status = 'manutencao' AND NEW.quantidade > 0 THEN
+    NEW.status := 'livre';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+"
+public,validar_e_ajustar_manutencao_equipamento,,trigger,"CREATE OR REPLACE FUNCTION public.validar_e_ajustar_manutencao_equipamento()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  -- Se todo o estoque estiver em manutenção, atualiza status para 'manutencao'
+  IF NEW.quantidade = 0 AND NEW.quantidade_manutencao > 0 THEN
+    NEW.status := 'manutencao';
+  -- Se o status estava como 'manutencao' e voltou a ter estoque disponível
+  ELSIF NEW.quantidade > 0 AND NEW.status = 'manutencao' THEN
+    NEW.status := 'livre';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+"
+public,validar_pre_cadastro_admin,"p_email text, p_codigo text",boolean,"CREATE OR REPLACE FUNCTION public.validar_pre_cadastro_admin(p_email text, p_codigo text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.administradores
+    WHERE email = p_email AND codigo = p_codigo
+  );
+END;
+$function$
+"
+public,validar_pre_cadastro_usuario,"p_email text, p_matricula text",boolean,"CREATE OR REPLACE FUNCTION public.validar_pre_cadastro_usuario(p_email text, p_matricula text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.usuarios
+    WHERE email = p_email AND matricula = p_matricula
+  );
+END;
+$function$
+"
