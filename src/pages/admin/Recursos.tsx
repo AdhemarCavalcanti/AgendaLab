@@ -4,9 +4,8 @@ import type { Equipamento, Sala, StatusRecurso, TipoRecurso } from '../../lib/ty
 import { StatusBadge } from '../../components/StatusBadge'
 import { Modal } from '../../components/Modal'
 
-// Tipagem estendida para garantir a tipagem da coluna regras_uso
 type SalaComRegras = Sala & { regras_uso?: string }
-type EquipamentoComRegras = Equipamento & { regras_uso?: string }
+type EquipamentoComRegras = Equipamento & { regras_uso?: string; quantidade_manutencao?: number }
 
 const STATUS_OPTS: StatusRecurso[] = ['livre', 'ocupado', 'manutencao']
 
@@ -19,6 +18,14 @@ export function AdminRecursos() {
 
   const [modalAberto, setModalAberto] = useState(false)
   const [editando, setEditando] = useState<SalaComRegras | EquipamentoComRegras | null>(null)
+
+  // Estado para controlar a modal de manutenção parcial em equipamentos
+  const [equipamentoManutencao, setEquipamentoManutencao] = useState<{
+    item: EquipamentoComRegras
+    acao: 'entrar' | 'sair'
+  } | null>(null)
+  const [qtdManutencaoInput, setQtdManutencaoInput] = useState<number>(1)
+  const [enviandoManutencao, setEnviandoManutencao] = useState(false)
 
   async function carregar() {
     setLoading(true)
@@ -45,14 +52,68 @@ export function AdminRecursos() {
     else carregar()
   }
 
-  async function alternarManutencao(item: SalaComRegras | EquipamentoComRegras) {
-    const tabela = aba === 'sala' ? 'salas' : 'equipamentos'
-    const coluna = aba === 'sala' ? 'id_sala' : 'id'
-    const id = aba === 'sala' ? (item as SalaComRegras).id_sala : (item as EquipamentoComRegras).id
+  async function alternarManutencaoSala(item: SalaComRegras) {
     const novoStatus: StatusRecurso = item.status === 'manutencao' ? 'livre' : 'manutencao'
-    const { error } = await supabase.from(tabela).update({ status: novoStatus }).eq(coluna, id)
+    const { error } = await supabase.from('salas').update({ status: novoStatus }).eq('id_sala', item.id_sala)
     if (error) alert('Erro: ' + error.message)
     else carregar()
+  }
+
+  function abrirModalManutencaoEquipamento(item: EquipamentoComRegras, acao: 'entrar' | 'sair') {
+    setEquipamentoManutencao({ item, acao })
+    setQtdManutencaoInput(1)
+  }
+
+  async function confirmarManutencaoEquipamento() {
+    if (!equipamentoManutencao || qtdManutencaoInput <= 0) return
+
+    const { item, acao } = equipamentoManutencao
+    const qtdAtual = item.quantidade ?? 0
+    const qtdManutencaoAtual = item.quantidade_manutencao ?? 0
+
+    let novaQtd = qtdAtual
+    let novaQtdManutencao = qtdManutencaoAtual
+
+    if (acao === 'entrar') {
+      if (qtdManutencaoInput > qtdAtual) {
+        alert('A quantidade em manutenção não pode ser maior do que o estoque disponível.')
+        return
+      }
+      novaQtd = qtdAtual - qtdManutencaoInput
+      novaQtdManutencao = qtdManutencaoAtual + qtdManutencaoInput
+    } else {
+      novaQtd = qtdAtual + qtdManutencaoInput
+      novaQtdManutencao = Math.max(0, qtdManutencaoAtual - qtdManutencaoInput)
+    }
+
+    // Define status global
+    let novoStatus: StatusRecurso = 'livre'
+    if (novaQtd === 0 && novaQtdManutencao > 0) {
+      novoStatus = 'manutencao'
+    } else if (item.status === 'manutencao' && novaQtd > 0) {
+      novoStatus = 'livre'
+    } else {
+      novoStatus = item.status
+    }
+
+    setEnviandoManutencao(true)
+    const { error } = await supabase
+      .from('equipamentos')
+      .update({
+        quantidade: novaQtd,
+        quantidade_manutencao: novaQtdManutencao,
+        status: novoStatus,
+      })
+      .eq('id', item.id)
+
+    setEnviandoManutencao(false)
+
+    if (error) {
+      alert('Erro ao atualizar manutenção: ' + error.message)
+    } else {
+      setEquipamentoManutencao(null)
+      carregar()
+    }
   }
 
   const lista = aba === 'sala' ? salas : equipamentos
@@ -101,7 +162,7 @@ export function AdminRecursos() {
             <thead className="bg-(--color-paper) font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">
               <tr>
                 <th className="px-4 py-3">Nome</th>
-                <th className="px-4 py-3">{aba === 'sala' ? 'Capacidade' : 'Quantidade'}</th>
+                <th className="px-4 py-3">{aba === 'sala' ? 'Capacidade' : 'Disponível / Manutenção'}</th>
                 <th className="px-4 py-3">Regras de Uso</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Ações</th>
@@ -110,11 +171,21 @@ export function AdminRecursos() {
             <tbody>
               {lista.map((item) => {
                 const id = aba === 'sala' ? (item as SalaComRegras).id_sala : (item as EquipamentoComRegras).id
-                const qtd = aba === 'sala' ? (item as SalaComRegras).lotacao : (item as EquipamentoComRegras).quantidade
                 return (
                   <tr key={id} className="border-t border-(--color-border)">
                     <td className="px-4 py-3 font-medium">{item.nome}</td>
-                    <td className="px-4 py-3 font-mono">{qtd}</td>
+                    <td className="px-4 py-3 font-mono">
+                      {aba === 'sala' ? (
+                        (item as SalaComRegras).lotacao
+                      ) : (
+                        <span>
+                          {(item as EquipamentoComRegras).quantidade}{' '}
+                          <span className="text-xs text-(--color-ink-soft)">
+                            ({(item as EquipamentoComRegras).quantidade_manutencao ?? 0} em manut.)
+                          </span>
+                        </span>
+                      )}
+                    </td>
                     <td className="max-w-xs px-4 py-3">
                       <p className="line-clamp-2 text-xs text-(--color-ink-soft)">
                         {item.regras_uso ? item.regras_uso : <span className="italic opacity-50">Nenhuma regra cadastrada</span>}
@@ -134,12 +205,34 @@ export function AdminRecursos() {
                         >
                           editar
                         </button>
-                        <button
-                          onClick={() => alternarManutencao(item)}
-                          className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium hover:bg-black/5"
-                        >
-                          {item.status === 'manutencao' ? 'reativar' : 'manutenção'}
-                        </button>
+
+                        {aba === 'sala' ? (
+                          <button
+                            onClick={() => alternarManutencaoSala(item as SalaComRegras)}
+                            className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium hover:bg-black/5"
+                          >
+                            {item.status === 'manutencao' ? 'reativar' : 'manutenção'}
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => abrirModalManutencaoEquipamento(item as EquipamentoComRegras, 'entrar')}
+                              className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium hover:bg-black/5"
+                              disabled={(item as EquipamentoComRegras).quantidade <= 0}
+                            >
+                              + manutenção
+                            </button>
+                            {((item as EquipamentoComRegras).quantidade_manutencao ?? 0) > 0 && (
+                              <button
+                                onClick={() => abrirModalManutencaoEquipamento(item as EquipamentoComRegras, 'sair')}
+                                className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium hover:bg-black/5 text-(--color-cyan)"
+                              >
+                                retornar
+                              </button>
+                            )}
+                          </>
+                        )}
+
                         <button
                           onClick={() => excluir(id)}
                           className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-medium text-(--color-coral) hover:bg-(--color-coral-soft)"
@@ -167,6 +260,50 @@ export function AdminRecursos() {
           }}
         />
       )}
+
+      {equipamentoManutencao && (
+        <Modal
+          title={
+            equipamentoManutencao.acao === 'entrar'
+              ? `Enviar para manutenção: ${equipamentoManutencao.item.nome}`
+              : `Retornar da manutenção: ${equipamentoManutencao.item.nome}`
+          }
+          onClose={() => setEquipamentoManutencao(null)}
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-(--color-ink-soft)">
+              {equipamentoManutencao.acao === 'entrar'
+                ? `Estoque livre atual: ${equipamentoManutencao.item.quantidade}. Quantas unidades deseja colocar em manutenção?`
+                : `Unidades em manutenção atual: ${equipamentoManutencao.item.quantidade_manutencao ?? 0}. Quantas unidades estão retornando para o estoque livre?`}
+            </p>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium">Quantidade</span>
+              <input
+                type="number"
+                min={1}
+                max={
+                  equipamentoManutencao.acao === 'entrar'
+                    ? equipamentoManutencao.item.quantidade
+                    : undefined
+                }
+                value={qtdManutencaoInput}
+                onChange={(e) => setQtdManutencaoInput(Number(e.target.value))}
+                className="input"
+              />
+            </label>
+
+            <div className="flex justify-end gap-2">
+              <button className="btn-secondary" onClick={() => setEquipamentoManutencao(null)} disabled={enviandoManutencao}>
+                cancelar
+              </button>
+              <button className="btn-primary" onClick={confirmarManutencaoEquipamento} disabled={enviandoManutencao || qtdManutencaoInput < 1}>
+                {enviandoManutencao ? 'salvando…' : 'confirmar'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -186,6 +323,9 @@ function RecursoForm({
   const [nome, setNome] = useState(item?.nome ?? '')
   const [quantidadeOuLotacao, setQuantidadeOuLotacao] = useState(
     isSala ? (item as SalaComRegras)?.lotacao ?? 10 : (item as EquipamentoComRegras)?.quantidade ?? 1
+  )
+  const [qtdManutencao, setQtdManutencao] = useState(
+    !isSala ? (item as EquipamentoComRegras)?.quantidade_manutencao ?? 0 : 0
   )
   const [regrasUso, setRegrasUso] = useState(item?.regras_uso ?? '')
   const [status, setStatus] = useState<StatusRecurso>(item?.status ?? 'livre')
@@ -218,6 +358,7 @@ function RecursoForm({
       const payload = {
         nome,
         quantidade: quantidadeOuLotacao,
+        quantidade_manutencao: qtdManutencao,
         status,
         regras_uso: regrasUso.trim() || null,
       }
@@ -246,16 +387,29 @@ function RecursoForm({
         </label>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-medium">{isSala ? 'Capacidade (lotação)' : 'Quantidade'}</span>
+          <span className="mb-1 block text-sm font-medium">{isSala ? 'Capacidade (lotação)' : 'Quantidade disponível'}</span>
           <input
             type="number"
-            min={1}
+            min={0}
             value={quantidadeOuLotacao}
             onChange={(e) => setQuantidadeOuLotacao(Number(e.target.value))}
             className="input"
             required
           />
         </label>
+
+        {!isSala && (
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium">Quantidade em manutenção</span>
+            <input
+              type="number"
+              min={0}
+              value={qtdManutencao}
+              onChange={(e) => setQtdManutencao(Number(e.target.value))}
+              className="input"
+            />
+          </label>
+        )}
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Regras de Uso</span>
