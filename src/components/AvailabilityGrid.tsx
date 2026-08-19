@@ -5,6 +5,7 @@ export interface Ocupacao {
   fim: string | Date
   status: string
   mine?: boolean
+  quantidade?: number
 }
 
 interface Props {
@@ -12,7 +13,9 @@ interface Props {
   ocupacoes: Ocupacao[]
   startHour?: number
   endHour?: number
-  onConfirmSelection?: (inicio: Date, fim: Date) => void // <-- Opcional para não dar erro com admins
+  totalEstoque?: number
+  isEquipamento?: boolean
+  onConfirmSelection?: (inicio: Date, fim: Date) => void
   disabled?: boolean
 }
 
@@ -26,7 +29,16 @@ function sameSlot(date: Date, hour: number) {
   return d
 }
 
-export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21, onConfirmSelection, disabled }: Props) {
+export function AvailabilityGrid({
+  date,
+  ocupacoes,
+  startHour = 7,
+  endHour = 21,
+  totalEstoque = 1,
+  isEquipamento = false,
+  onConfirmSelection,
+  disabled,
+}: Props) {
   const [selected, setSelected] = useState<number[]>([])
   const hours = useMemo(() => {
     const arr: number[] = []
@@ -36,11 +48,19 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
 
   const now = new Date()
 
-  function statusOfHour(hour: number): { kind: 'passado' | 'livre' | 'pendente' | 'aprovada'; mine?: boolean } {
+  function statusOfHour(hour: number): {
+    kind: 'passado' | 'livre' | 'pendente' | 'aprovada' | 'esgotado'
+    mine?: boolean
+    qtdEmUso: number
+  } {
     const slotStart = sameSlot(date, hour)
     const slotEnd = sameSlot(date, hour + 1)
 
-    if (slotStart.getTime() < now.getTime()) return { kind: 'passado' }
+    if (slotStart.getTime() < now.getTime()) return { kind: 'passado', qtdEmUso: 0 }
+
+    let qtdEmUso = 0
+    let temMinhaOcupacao = false
+    let statusPredominante = 'livre'
 
     for (const o of ocupacoes) {
       const oStart = o.inicio instanceof Date ? o.inicio : new Date(o.inicio)
@@ -48,15 +68,35 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
 
       if (slotStart.getTime() < oEnd.getTime() && slotEnd.getTime() > oStart.getTime()) {
         const st = o.status.toLowerCase()
-        if (st === 'pendente') return { kind: 'pendente', mine: o.mine }
-        if (st === 'aprovada' || st === 'confirmada') return { kind: 'aprovada', mine: o.mine }
+        if (st === 'pendente' || st === 'aprovada' || st === 'confirmada') {
+          qtdEmUso += o.quantidade ? Number(o.quantidade) : 1
+          if (o.mine) temMinhaOcupacao = true
+          if (st === 'aprovada' || st === 'confirmada') statusPredominante = 'aprovada'
+          else if (statusPredominante !== 'aprovada') statusPredominante = 'pendente'
+        }
       }
     }
-    return { kind: 'livre' }
+
+    // 1. Se atingiu ou ultrapassou a capacidade total do estoque
+    if (qtdEmUso >= totalEstoque) {
+      return { kind: 'esgotado', mine: temMinhaOcupacao, qtdEmUso }
+    }
+
+    // 2. Para SALAS (não equipamento): qualquer ocupação bloqueia o slot
+    if (!isEquipamento && qtdEmUso > 0) {
+      return {
+        kind: statusPredominante as 'pendente' | 'aprovada',
+        mine: temMinhaOcupacao,
+        qtdEmUso,
+      }
+    }
+
+    // 3. Para EQUIPAMENTOS com estoque restante: o slot permanece LIVRE e Clicável
+    return { kind: 'livre', mine: temMinhaOcupacao, qtdEmUso }
   }
 
   function toggleHour(hour: number) {
-    if (disabled || !onConfirmSelection) return // Bloqueia seleção se não houver callback (ex: perfis admin)
+    if (disabled || !onConfirmSelection) return
     const st = statusOfHour(hour)
     if (st.kind !== 'livre') return
 
@@ -92,12 +132,14 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
         {hours.map((h) => {
           const st = statusOfHour(h)
           const isSelected = selected.includes(h)
-          const podeSelecionar = !!onConfirmSelection && !disabled
+          const podeSelecionar = !!onConfirmSelection && !disabled && st.kind === 'livre'
 
           let cls =
-            'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono'
+            'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono select-none'
           if (st.kind === 'passado') {
             cls += ' border-transparent bg-black/[0.03] text-(--color-ink-soft)/50 cursor-not-allowed'
+          } else if (st.kind === 'esgotado') {
+            cls += ' border-(--color-coral)/30 bg-(--color-coral-soft) text-(--color-coral) cursor-not-allowed'
           } else if (st.kind === 'aprovada') {
             cls += ' border-(--color-cyan) bg-(--color-cyan) text-white cursor-not-allowed'
           } else if (st.kind === 'pendente') {
@@ -105,23 +147,33 @@ export function AvailabilityGrid({ date, ocupacoes, startHour = 7, endHour = 21,
           } else if (isSelected) {
             cls += ' border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) ring-2 ring-(--color-cyan)/40 cursor-pointer'
           } else {
-            cls += ` border-dashed border-(--color-cyan)/50 text-(--color-ink) ${podeSelecionar ? 'hover:bg-(--color-cyan-soft)/60 cursor-pointer' : 'cursor-default'}`
+            const temUsoParcial = isEquipamento && st.qtdEmUso > 0
+            cls += ` border-dashed border-(--color-cyan)/50 text-(--color-ink) ${
+              temUsoParcial ? 'bg-(--color-amber-soft)/20' : ''
+            } ${podeSelecionar ? 'hover:bg-(--color-cyan-soft)/60 cursor-pointer' : 'cursor-default'}`
           }
 
           return (
             <button
               type="button"
               key={h}
-              disabled={disabled || !podeSelecionar || st.kind === 'passado' || st.kind === 'aprovada' || st.kind === 'pendente'}
+              disabled={!podeSelecionar}
               onClick={() => toggleHour(h)}
               className={cls}
             >
               <span>{hourLabel(h)} – {hourLabel(h + 1)}</span>
               <span className="text-[11px] opacity-80">
                 {st.kind === 'passado' && 'indisponível'}
+                {st.kind === 'esgotado' && 'esgotado'}
                 {st.kind === 'aprovada' && (st.mine ? 'sua reserva' : 'ocupado')}
                 {st.kind === 'pendente' && (st.mine ? 'sua solicitação' : 'em análise')}
-                {st.kind === 'livre' && (isSelected ? 'selecionado' : '')}
+                {st.kind === 'livre' && (
+                  isSelected
+                    ? 'selecionado'
+                    : isEquipamento && st.qtdEmUso > 0
+                    ? `⚠️ ${st.qtdEmUso}/${totalEstoque} em uso`
+                    : ''
+                )}
               </span>
             </button>
           )
