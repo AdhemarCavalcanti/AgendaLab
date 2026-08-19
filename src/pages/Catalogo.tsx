@@ -2,7 +2,30 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
-import { StatusBadge } from '../components/StatusBadge'
+
+// Componente do Badge com cores personalizadas
+function StatusBadge({ status }: { status: string; tipo?: string }) {
+  const s = status.toLowerCase()
+
+  let estilos = 'border-gray-200 bg-gray-100 text-gray-700'
+
+  if (s === 'livre' || s === 'disponível' || s === 'disponivel') {
+    // Verde para disponível
+    estilos = 'border-emerald-200 bg-emerald-50 text-emerald-700 font-medium'
+  } else if (s === 'manutencao' || s === 'manutenção' || s === 'indisponivel' || s === 'indisponível') {
+    // Vermelho para manutenção
+    estilos = 'border-rose-200 bg-rose-50 text-rose-700 font-medium'
+  } else if (s === 'ocupado') {
+    // Amarelo/Laranja para ocupado
+    estilos = 'border-amber-200 bg-amber-50 text-amber-700 font-medium'
+  }
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs capitalize ${estilos}`}>
+      {status}
+    </span>
+  )
+}
 
 interface Recurso {
   id: number
@@ -66,7 +89,7 @@ export function Catalogo() {
       tipo: 'equipamento',
       nome: e.nome,
       detalhe: `Quantidade disponível: ${e.quantidade}`,
-      status: e.quantidade > 0 ? 'disponível' : 'ocupado',
+      status: e.quantidade > 0 ? 'disponível' : 'manutenção',
     }))
 
     return [...rSalas, ...rEquip]
