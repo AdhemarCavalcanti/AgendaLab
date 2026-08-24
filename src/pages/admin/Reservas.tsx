@@ -127,14 +127,67 @@ export function AdminReservas() {
     .filter((i) => filtroStatus === 'todas' || i.status === filtroStatus)
     .filter((i) => filtroTipo === 'todos' || i.tipo === filtroTipo)
 
+    //funcao de exportacao
+  function exportarParaCSV() {
+    if (filtrados.length === 0) {
+      alert('Não há dados para exportar.')
+      return
+    }
+
+    // 1. Montar o cabeçalho dinâmico (Admin vê o solicitante, o aluno não)
+    const cabecalho = role === 'admin'
+      ? 'Recurso,Tipo,Solicitante,Data Inicio,Data Fim,Status,Detalhes\n'
+      : 'Recurso,Tipo,Data Inicio,Data Fim,Status,Detalhes\n'
+
+    let csv = cabecalho
+
+    // 2. Preencher as linhas formatando as datas
+    filtrados.forEach((item) => {
+      const recurso = `"${item.recursoNome}"`
+      const tipo = `"${item.tipo}"`
+      const solicitante = `"${item.usuarioNome}"`
+      const inicio = `"${new Date(item.inicio).toLocaleString('pt-BR')}"`
+      const fim = `"${new Date(item.fim).toLocaleString('pt-BR')}"`
+      const status = `"${item.status}"`
+      const detalhe = `"${item.detalhe ? item.detalhe.replace(/"/g, '""') : ''}"` // Evita quebra se tiver aspas no texto
+
+      if (role === 'admin') {
+        csv += `${recurso},${tipo},${solicitante},${inicio},${fim},${status},${detalhe}\n`
+      } else {
+        csv += `${recurso},${tipo},${inicio},${fim},${status},${detalhe}\n`
+      }
+    })
+
+    // 3. Gerar o download
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'historico_reservas.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }  
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
       <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">
         {role === 'admin' ? 'painel administrativo' : 'minhas reservas'}
       </p>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
       <h1 className="mb-6 font-display text-3xl font-bold">
         {role === 'admin' ? 'Todas as reservas' : 'Histórico de reservas'}
       </h1>
+
+      <button
+          onClick={exportarParaCSV}
+          className="btn-secondary text-xs"
+          disabled={filtrados.length === 0}
+        >
+          ↓ baixar histórico (csv)
+        </button>
+      </div>
 
       <div className="mb-6 flex flex-wrap items-center gap-2">
         {FILTROS.map((f) => (

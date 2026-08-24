@@ -85,12 +85,46 @@ export function AdminDashboard() {
 
   const pendentesCount = todasReservas.filter((r) => r.status === 'pendente').length
 
+  // funcao exportacao
+  function exportarParaCSV() { 
+    if (ocupacaoPorRecurso.length === 0) {
+      alert('Não há dados de ocupação para exportar.')
+      return
+    }
+
+    let csv = 'Recurso,Tipo,Horas de Uso,Taxa de Ocupacao (%)\n'
+
+    ocupacaoPorRecurso.forEach((r) => {
+      csv += `"${r.nome}","${r.tipo}",${r.horas.toFixed(1)},${r.pct}%\n`
+    })
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'metricas_ocupacao.csv')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 font-mono text-sm text-(--color-ink-soft)">carregando métricas…</p>
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
       <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
-      <h1 className="mb-8 font-display text-3xl font-bold">Dashboard &amp; métricas</h1>
+      
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+        <h1 className="font-display text-3xl font-bold">Dashboard &amp; métricas</h1>
+        
+        <button 
+          onClick={exportarParaCSV}
+          className="btn-secondary text-xs"
+          disabled={ocupacaoPorRecurso.length === 0}
+        >
+          ↓ exportar planilha (csv)
+        </button>
+      </div>
 
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Reservas concluídas" value={concluidas.length} />

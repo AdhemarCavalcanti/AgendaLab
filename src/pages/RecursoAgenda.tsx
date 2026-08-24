@@ -41,6 +41,7 @@ export function RecursoAgenda() {
   const [qtdPessoas, setQtdPessoas] = useState(1)
   const [qtdEquipamento, setQtdEquipamento] = useState(1)
   const [observacao, setObservacao] = useState('')
+  const [aceitouRegras, setAceitouRegras] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [formErro, setFormErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState(false)
@@ -143,6 +144,7 @@ export function RecursoAgenda() {
     setFormErro(null)
     setQtdPessoas(1)
     setQtdEquipamento(1)
+    setAceitouRegras(false)
     setPendingSlot({ inicio, fim })
   }
 
@@ -368,6 +370,20 @@ export function RecursoAgenda() {
                 <textarea value={observacao} onChange={(e) => setObservacao(e.target.value)} className="input" rows={2} />
               </label>
 
+              {recurso.regras_uso && (
+                <label className="mt-2 flex items-start gap-2 cursor-pointer rounded-md border border-(--color-border) bg-black/5 p-3">
+                  <input
+                    type="checkbox"
+                    checked={aceitouRegras}
+                    onChange={(e) => setAceitouRegras(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-sm text-(--color-ink-soft) leading-tight">
+                    Declaro que li e concordo com as regras de uso específicas deste recurso.
+                  </span>
+                </label>
+            )}
+
               {formErro && (
                 <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
                   {formErro}
@@ -383,6 +399,7 @@ export function RecursoAgenda() {
                   onClick={confirmarReserva}
                   disabled={
                     enviando ||
+                    (recurso.regras_uso && !aceitouRegras) ||
                     (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || qtdPessoas < 1)) ||
                     (tipo === 'equipamento' && (disponivelNoSlot <= 0 || qtdEquipamento > disponivelNoSlot || qtdEquipamento < 1))
                   }
