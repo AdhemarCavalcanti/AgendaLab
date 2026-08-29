@@ -25,6 +25,75 @@ Todas usam `SECURITY DEFINER` + `is_admin()`, então só funcionam para quem já
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
 
+## Modelo de Dados (DER)
+
+Este diagrama representa o modelo de dados e relacionamentos do banco de dados (Supabase/PostgreSQL) para o AgendaLab:
+
+```mermaid
+erDiagram
+    usuarios {
+        bigint id_usuario PK
+        uuid uuid FK
+        text nome
+        text email
+        text matricula
+    }
+    administradores {
+        bigint id_adm PK
+        uuid uuid FK
+        text nome
+        text email
+        text codigo
+    }
+    salas {
+        bigint id_sala PK
+        text nome
+        integer lotacao
+        status_recurso status
+        text regras_uso
+    }
+    equipamentos {
+        bigint id PK
+        text nome
+        integer quantidade
+        status_recurso status
+        text regras_uso
+        integer quantidade_manutencao
+    }
+    reservas_salas {
+        bigint id PK
+        bigint id_usuario FK
+        bigint id_sala FK
+        bigint id_adm FK
+        timestamptz inicio
+        timestamptz fim
+        status_reserva status
+        text motivo
+        integer quantidade_pessoas
+        text observacao
+    }
+    reservas_equipamentos {
+        bigint id PK
+        bigint id_usuario FK
+        bigint id_equipamento FK
+        bigint id_adm FK
+        timestamptz inicio
+        timestamptz fim
+        status_reserva status
+        status_devolucao status_devolucao
+        text observacao
+        text motivo
+        integer quantidade
+    }
+
+    usuarios ||--o{ reservas_salas : "realiza"
+    usuarios ||--o{ reservas_equipamentos : "realiza"
+    salas ||--o{ reservas_salas : "reservada_em"
+    equipamentos ||--o{ reservas_equipamentos : "reservado_em"
+    administradores ||--o{ reservas_salas : "gerencia"
+    administradores ||--o{ reservas_equipamentos : "gerencia"
+```
+
 ## Como rodar
 
 ```bash
