@@ -55,7 +55,7 @@ export function Navbar() {
 
         {perfil ? (
           <div className="flex items-center gap-3">
-            {role === 'admin' && <NotificationBell />}
+            {(role === 'admin' || role === 'aluno') && <NotificationBell />}
             <div className="hidden text-right sm:block">
               <p className="text-sm font-medium leading-tight text-(--color-ink)">{perfil.nome}</p>
               <p className="text-xs font-mono leading-tight text-(--color-ink-soft)">{role === 'admin' ? 'admin' : 'aluno/pesquisador'}</p>

@@ -68,3 +68,12 @@ export interface PreCadastro {
   identificador: string
   criado_em: string
 }
+
+export interface Notificacao {
+  id: string
+  id_usuario: number
+  titulo: string
+  mensagem: string
+  lida: boolean
+  criado_em: string
+}
