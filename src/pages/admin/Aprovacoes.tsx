@@ -133,8 +133,8 @@ export function AdminAprovacoes() {
   async function aprovar(item: Solicitacao) {
     setProcessando(item.id)
     const tabela = item.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
-    
-    const payloadUpdate = item.tipo === 'equipamento' 
+
+    const payloadUpdate = item.tipo === 'equipamento'
       ? { status: 'aprovada', status_devolucao: 'pendente', id_adm: meuIdAdm }
       : { status: 'aprovada', id_adm: meuIdAdm }
 
@@ -150,13 +150,13 @@ export function AdminAprovacoes() {
 
   async function marcarDevolvido(item: Solicitacao) {
     setProcessando(item.id)
-    
+
     try {
       const { data, error } = await supabase
         .from('reservas_equipamentos')
-        .update({ 
-          status_devolucao: 'devolvido', 
-          id_adm: meuIdAdm 
+        .update({
+          status_devolucao: 'devolvido',
+          id_adm: meuIdAdm
         })
         .eq('id', Number(item.id))
         .select()
@@ -185,27 +185,41 @@ export function AdminAprovacoes() {
     if (!rejeitando) return
     setProcessando(rejeitando.id)
     const tabela = rejeitando.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
-    
-    const payload: Record<string, unknown> = { 
-      status: 'cancelada', 
-      id_adm: meuIdAdm 
+
+    const payload: Record<string, unknown> = {
+      status: 'cancelada',
+      id_adm: meuIdAdm
     }
 
     // Se for cancelamento de equipamento, define status_devolucao como 'devolvido'
     if (rejeitando.tipo === 'equipamento') {
       payload.status_devolucao = 'devolvido'
     }
-    
+
     if (justificativa.trim()) {
       payload.motivo = justificativa.trim()
     }
-    
-    const { error } = await supabase.from(tabela).update(payload).eq('id', Number(rejeitando.id))
+
+    // Executa o update e retorna os dados atualizados para conferência
+    const { data, error } = await supabase
+      .from(tabela)
+      .update(payload)
+      .eq('id', Number(rejeitando.id))
+      .select()
+
     setProcessando(null)
+
     if (error) {
+      console.error('Erro ao cancelar reserva:', error)
       alert('Erro: ' + error.message)
       return
     }
+
+    if (!data || data.length === 0) {
+      alert('Nenhum registro foi atualizado. Verifique se a política RLS de UPDATE permite alterar este registro.')
+      return
+    }
+
     setRejeitando(null)
     setJustificativa('')
     carregar()
@@ -230,21 +244,19 @@ export function AdminAprovacoes() {
       <div className="mb-6 mt-4 flex gap-2">
         <button
           onClick={() => setAba('pendentes')}
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-            aba === 'pendentes'
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${aba === 'pendentes'
               ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
               : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-          }`}
+            }`}
         >
           Fila de aprovações ({itens.length})
         </button>
         <button
           onClick={() => setAba('devolucao')}
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-            aba === 'devolucao'
+          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${aba === 'devolucao'
               ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
               : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-          }`}
+            }`}
         >
           Pedidos para devolução ({devolucoes.length})
         </button>
@@ -267,7 +279,7 @@ export function AdminAprovacoes() {
                     <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-amber)">pendente</span>
                   </div>
                   <p className="font-medium">{item.recursoNome} — solicitado por {item.usuarioNome}</p>
-                  
+
                   <p className="text-xs text-(--color-ink-soft)">
                     {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
                     {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
@@ -309,7 +321,7 @@ export function AdminAprovacoes() {
                   <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
                 </div>
                 <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
-                
+
                 <p className="text-xs text-(--color-ink-soft)">
                   {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
                   {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
