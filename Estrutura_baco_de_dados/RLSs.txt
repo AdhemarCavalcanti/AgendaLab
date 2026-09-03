@@ -1,0 +1,56 @@
+schema,tabela,nome_politica,codigo_sql_completo
+public,administradores,admin_delete,CREATE POLICY admin_delete ON public.administradores FOR DELETE TO authenticated USING (((uuid = ( SELECT auth.uid() AS uid)) OR (( SELECT auth.role() AS role) = 'authenticated'::text))) ;
+public,administradores,admin_insert,"CREATE POLICY admin_insert ON public.administradores FOR INSERT TO anon, authenticated  WITH CHECK (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL) OR (( SELECT auth.role() AS role) = 'authenticated'::text)));"
+public,administradores,admin_select,"CREATE POLICY admin_select ON public.administradores FOR SELECT TO anon, authenticated USING (true) ;"
+public,administradores,admin_update,"CREATE POLICY admin_update ON public.administradores FOR UPDATE TO anon, authenticated USING (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL))) WITH CHECK (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL)));"
+public,equipamentos,equipamentos_delete,"CREATE POLICY equipamentos_delete ON public.equipamentos FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores))) ;"
+public,equipamentos,equipamentos_insert,"CREATE POLICY equipamentos_insert ON public.equipamentos FOR INSERT TO authenticated  WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores)));"
+public,equipamentos,equipamentos_select,"CREATE POLICY equipamentos_select ON public.equipamentos FOR SELECT TO anon, authenticated USING (true) ;"
+public,equipamentos,equipamentos_update,"CREATE POLICY equipamentos_update ON public.equipamentos FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores))) WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores)));"
+public,notificacoes,Permitir inserção de notificacoes por usuarios autenticados,"CREATE POLICY ""Permitir inserção de notificacoes por usuarios autenticados"" ON public.notificacoes FOR INSERT TO authenticated  WITH CHECK ((id_usuario = get_meu_usuario_id()));"
+public,notificacoes,Usuários podem atualizar suas próprias notificações,"CREATE POLICY ""Usuários podem atualizar suas próprias notificações"" ON public.notificacoes FOR UPDATE TO authenticated USING ((id_usuario = get_meu_usuario_id())) ;"
+public,notificacoes,Usuários podem ver suas próprias notificações,"CREATE POLICY ""Usuários podem ver suas próprias notificações"" ON public.notificacoes FOR SELECT TO authenticated USING ((id_usuario = get_meu_usuario_id())) ;"
+public,reservas_equipamentos,reservas_equipamentos_delete,"CREATE POLICY reservas_equipamentos_delete ON public.reservas_equipamentos FOR DELETE TO authenticated USING (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a)))) ;"
+public,reservas_equipamentos,reservas_equipamentos_insert,"CREATE POLICY reservas_equipamentos_insert ON public.reservas_equipamentos FOR INSERT TO authenticated  WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT usuarios.uuid
+   FROM usuarios)));"
+public,reservas_equipamentos,reservas_equipamentos_select,"CREATE POLICY reservas_equipamentos_select ON public.reservas_equipamentos FOR SELECT TO anon, authenticated USING (true) ;"
+public,reservas_equipamentos,reservas_equipamentos_update,"CREATE POLICY reservas_equipamentos_update ON public.reservas_equipamentos FOR UPDATE TO authenticated USING (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a)))) WITH CHECK (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a))));"
+public,reservas_salas,reservas_salas_delete,"CREATE POLICY reservas_salas_delete ON public.reservas_salas FOR DELETE TO authenticated USING (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a)))) ;"
+public,reservas_salas,reservas_salas_insert,"CREATE POLICY reservas_salas_insert ON public.reservas_salas FOR INSERT TO authenticated  WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT usuarios.uuid
+   FROM usuarios)));"
+public,reservas_salas,reservas_salas_select,"CREATE POLICY reservas_salas_select ON public.reservas_salas FOR SELECT TO anon, authenticated USING (true) ;"
+public,reservas_salas,reservas_salas_update,"CREATE POLICY reservas_salas_update ON public.reservas_salas FOR UPDATE TO authenticated USING (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a)))) WITH CHECK (((id_usuario IN ( SELECT u.id_usuario
+   FROM usuarios u
+  WHERE (u.uuid = ( SELECT auth.uid() AS uid)))) OR (( SELECT auth.uid() AS uid) IN ( SELECT a.uuid
+   FROM administradores a))));"
+public,salas,salas_delete,"CREATE POLICY salas_delete ON public.salas FOR DELETE TO authenticated USING ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores))) ;"
+public,salas,salas_insert,"CREATE POLICY salas_insert ON public.salas FOR INSERT TO authenticated  WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores)));"
+public,salas,salas_select,"CREATE POLICY salas_select ON public.salas FOR SELECT TO anon, authenticated USING (true) ;"
+public,salas,salas_update,"CREATE POLICY salas_update ON public.salas FOR UPDATE TO authenticated USING ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores))) WITH CHECK ((( SELECT auth.uid() AS uid) IN ( SELECT administradores.uuid
+   FROM administradores)));"
+public,usuarios,usuarios_delete,CREATE POLICY usuarios_delete ON public.usuarios FOR DELETE TO authenticated USING (((uuid = ( SELECT auth.uid() AS uid)) OR (( SELECT auth.role() AS role) = 'authenticated'::text))) ;
+public,usuarios,usuarios_insert,"CREATE POLICY usuarios_insert ON public.usuarios FOR INSERT TO anon, authenticated  WITH CHECK (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL) OR (( SELECT auth.role() AS role) = 'authenticated'::text)));"
+public,usuarios,usuarios_select,"CREATE POLICY usuarios_select ON public.usuarios FOR SELECT TO anon, authenticated USING (true) ;"
+public,usuarios,usuarios_update,"CREATE POLICY usuarios_update ON public.usuarios FOR UPDATE TO anon, authenticated USING (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL))) WITH CHECK (((uuid = ( SELECT auth.uid() AS uid)) OR (uuid IS NULL)));"

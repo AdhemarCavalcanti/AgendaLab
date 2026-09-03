@@ -10,13 +10,10 @@ function StatusBadge({ status }: { status: string; tipo?: string }) {
   let estilos = 'border-gray-200 bg-gray-100 text-gray-700'
 
   if (s === 'livre' || s === 'disponível' || s === 'disponivel') {
-    // Verde para disponível
     estilos = 'border-emerald-200 bg-emerald-50 text-emerald-700 font-medium'
   } else if (s === 'manutencao' || s === 'manutenção' || s === 'indisponivel' || s === 'indisponível') {
-    // Vermelho para manutenção
     estilos = 'border-rose-200 bg-rose-50 text-rose-700 font-medium'
   } else if (s === 'ocupado') {
-    // Amarelo/Laranja para ocupado
     estilos = 'border-amber-200 bg-amber-50 text-amber-700 font-medium'
   }
 
@@ -59,14 +56,12 @@ export function Catalogo() {
     load()
   }, [])
 
-  // Função para redefinir todos os filtros
   const limparFiltros = () => {
     setBusca('')
     setTipo('todos')
     setStatusFiltro('todos')
   }
 
-  // Verifica se há algum filtro ativo diferente do padrão
   const temFiltroAtivo = busca !== '' || tipo !== 'todos' || statusFiltro !== 'todos'
 
   const recursos: Recurso[] = useMemo(() => {
@@ -84,13 +79,21 @@ export function Catalogo() {
       }
     })
 
-    const rEquip: Recurso[] = equipamentos.map((e) => ({
-      id: e.id,
-      tipo: 'equipamento',
-      nome: e.nome,
-      detalhe: `Quantidade disponível: ${e.quantidade}`,
-      status: e.quantidade > 0 ? 'disponível' : 'manutenção',
-    }))
+    const rEquip: Recurso[] = equipamentos.map((e) => {
+      // Cast seguro para e as any evitando que a falta do tipo na interface trave o build
+      const equipAny = e as any
+      const qtdTotal = Number(equipAny.quantidade || 0)
+      const qtdManutencao = Number(equipAny.quantidade_manutencao || 0)
+      const saldoDisponivel = Math.max(0, qtdTotal - qtdManutencao)
+
+      return {
+        id: e.id,
+        tipo: 'equipamento',
+        nome: e.nome,
+        detalhe: `Quantidade disponível: ${saldoDisponivel}`,
+        status: saldoDisponivel > 0 ? 'disponível' : 'manutenção',
+      }
+    })
 
     return [...rSalas, ...rEquip]
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
@@ -106,11 +109,9 @@ export function Catalogo() {
         <p className="mt-1 text-(--color-ink-soft)">Filtre por tipo, status e busque por nome em tempo real.</p>
       </div>
 
-      {/* Painel de Filtros Estruturado */}
+      {/* Painel de Filtros */}
       <div className="mb-8 rounded-xl border border-(--color-border) bg-black/5 p-4 md:p-5">
         <div className="flex flex-col gap-4">
-          
-          {/* Linha Superior: Campo de Busca + Botão Limpar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative w-full sm:max-w-md">
               <input
@@ -142,10 +143,7 @@ export function Catalogo() {
 
           <hr className="border-(--color-border)/50" />
 
-          {/* Linha Inferior: Seletores Didáticos */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            
-            {/* Grupo Tipo */}
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
                 Tipo de Recurso
@@ -171,7 +169,6 @@ export function Catalogo() {
               </div>
             </div>
 
-            {/* Grupo Status */}
             <div className="flex flex-col gap-1.5">
               <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
                 Status de Disponibilidade
@@ -197,7 +194,6 @@ export function Catalogo() {
                 ))}
               </div>
             </div>
-
           </div>
         </div>
       </div>
