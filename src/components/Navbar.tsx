@@ -56,10 +56,26 @@ export function Navbar() {
         {perfil ? (
           <div className="flex items-center gap-3">
             {(role === 'admin' || role === 'aluno') && <NotificationBell />}
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium leading-tight text-(--color-ink)">{perfil.nome}</p>
+            <NavLink
+              to="/perfil"
+              className="hidden text-right sm:block group hover:opacity-80 transition-opacity"
+              title="Acessar Perfil e Configurações"
+            >
+              <p className="text-sm font-medium leading-tight text-(--color-ink) group-hover:text-(--color-cyan)">{perfil.nome}</p>
               <p className="text-xs font-mono leading-tight text-(--color-ink-soft)">{role === 'admin' ? 'admin' : 'aluno/pesquisador'}</p>
-            </div>
+            </NavLink>
+            <NavLink
+              to="/perfil"
+              className={({ isActive }) =>
+                `rounded-md border border-(--color-border) px-3 py-1.5 text-sm font-medium font-mono transition-colors ${
+                  isActive
+                    ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
+                    : 'text-(--color-ink-soft) hover:border-(--color-cyan) hover:text-(--color-cyan)'
+                }`
+              }
+            >
+              perfil
+            </NavLink>
             <button
               onClick={handleSignOut}
               className="rounded-md border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-ink-soft) transition-colors hover:border-(--color-coral) hover:text-(--color-coral)"

@@ -21,6 +21,16 @@ inteiro no **SQL Editor** do Supabase antes de usar o app. Ele cria:
 
 Todas usam `SECURITY DEFINER` + `is_admin()`, então só funcionam para quem já é administrador — condizente com as RLS que você definiu.
 
+### 🗑️ Exclusão de Conta e Anonimização de Dados (LGPD/Privacidade)
+
+Para habilitar a exclusão atômica de conta no Supabase (que cancela reservas futuras ativas, limpa notificações, anonimiza dados cadastrais e remove o usuário de `auth.users`), execute o arquivo:
+
+```
+supabase/sql/exclusao_conta.sql
+```
+
+Ele cria a RPC `public.excluir_minha_conta()`, que é executada pelo próprio usuário autenticado de forma segura (`SECURITY DEFINER`). Caso ainda não tenha sido rodado, o front-end possui um fallback automático para realizar os cancelamentos e a anonimização.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -121,6 +131,15 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 - **Bloqueio por status do recurso** (`RecursoAgenda.tsx`): se a sala/equipamento estiver `ocupado` ou `manutencao`, a grade de horários nem aparece — mostra um aviso e não permite solicitar reserva, independentemente do horário.
 - **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
 - **Conflito de horário**: checagem client-side antes do insert + tratamento do erro `23P01` (caso a `EXCLUDE CONSTRAINT` do item 6 do SQL esteja aplicada).
+
+## Área do Usuário & Perfil
+
+- `/perfil` — Exibição dos dados cadastrais (nome, e-mail, papel, matrícula/código de admin), identificador de conta e **Zona de Perigo** para exclusão de conta.
+  - Alerta transparente sobre reservas futuras ativas (pendentes ou aprovadas) que serão canceladas.
+  - Confirmação explícita de segurança (digitação de "EXCLUIR").
+  - Cancelamento automático de reservas futuras ativas.
+  - Anonimização/remoção dos dados pessoais e desativação definitiva da conta.
+  - Encerramento imediato da sessão e feedback visual no login.
 
 ## Painel do administrador
 

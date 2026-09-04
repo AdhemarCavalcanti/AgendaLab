@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { supabase } from '../lib/supabase'
@@ -20,6 +20,13 @@ export function Login() {
   const [ok, setOk] = useState(false)
   const [mensagemSucesso, setMensagemSucesso] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.mensagemSucesso) {
+      setMensagemSucesso(location.state.mensagemSucesso)
+      window.history.replaceState({}, document.title)
+    }
+  }, [location.state])
 
   function limparMensagens() {
     setError(null)
@@ -245,6 +252,11 @@ export function Login() {
 
         {aba === 'entrar' && (
           <form onSubmit={handleLogin} className="space-y-4">
+            {mensagemSucesso && (
+              <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
+                {mensagemSucesso}
+              </p>
+            )}
             <Field label="E-mail">
               <input
                 type="email"

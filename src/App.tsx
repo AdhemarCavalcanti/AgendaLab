@@ -11,6 +11,7 @@ import { AdminAprovacoes } from './pages/admin/Aprovacoes'
 import { AdminReservas } from './pages/admin/Reservas'
 import { AdminGestaoUsuarios } from './pages/admin/GestaoUsuarios'
 import { AdminDashboard } from './pages/admin/Dashboard'
+import { Perfil } from './pages/Perfil'
 
 export default function App() {
   return (
@@ -23,6 +24,14 @@ export default function App() {
               <Route path="/" element={<Catalogo />} />
               <Route path="/login" element={<Login />} />
               <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+              <Route
+                path="/perfil"
+                element={
+                  <ProtectedRoute allow={['aluno', 'admin']}>
+                    <Perfil />
+                  </ProtectedRoute>
+                }
+              />
               <Route
                 path="/minhas-reservas"
                 element={
