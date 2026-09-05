@@ -25,6 +25,26 @@ const STATUS_MSG: Record<string, string> = {
   manutenção: 'Este recurso está em manutenção e não pode ser reservado no momento.',
 }
 
+const MSG_CONFLITO_CONCORRENCIA =
+  'Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período.'
+
+function isErroConcorrencia(error: any): boolean {
+  if (!error) return false
+  const code = error.code
+  const msg = (error.message || '').toLowerCase()
+  return (
+    code === '23P01' ||
+    code === '23505' ||
+    msg.includes('este horário acabou de ser reservado') ||
+    msg.includes('acabou de ser reservado') ||
+    msg.includes('reservado recentemente') ||
+    msg.includes('sem_sobreposicao') ||
+    msg.includes('sobreposicao') ||
+    msg.includes('conflito') ||
+    msg.includes('exclusion')
+  )
+}
+
 export function RecursoAgenda() {
   const { tipo, id } = useParams<{ tipo: TipoRecurso; id: string }>()
   const { user, role, meuIdUsuario } = useAuth()
@@ -106,7 +126,28 @@ export function RecursoAgenda() {
 
   useEffect(() => {
     carregarOcupacoes()
-  }, [tipo, id, selectedDate])
+
+    if (!tipo || !id) return
+
+    const channel = supabase
+      .channel(`agenda-realtime-${tipo}-${idNum}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: tabela,
+        },
+        () => {
+          carregarOcupacoes()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [tipo, id, selectedDate, tabela, idNum])
 
   const estoqueTotal = tipo === 'equipamento' ? (recurso as Equipamento)?.quantidade ?? 0 : 0
 
@@ -164,65 +205,142 @@ export function RecursoAgenda() {
     setEnviando(true)
     setFormErro(null)
 
+    const slotInicioISO = pendingSlot.inicio.toISOString()
+    const slotFimISO = pendingSlot.fim.toISOString()
+
+    // 1. Verificação prévia de conflito em tempo real antes de persistir
     if (tipo === 'sala') {
       const { data: conflitos } = await supabase
-        .from(tabela)
+        .from('reservas_salas')
         .select('id')
-        .eq(coluna, idNum)
+        .eq('id_sala', idNum)
         .in('status', ['pendente', 'aprovada'])
-        .lt('inicio', pendingSlot.fim.toISOString())
-        .gt('fim', pendingSlot.inicio.toISOString())
+        .lt('inicio', slotFimISO)
+        .gt('fim', slotInicioISO)
 
       if (conflitos && conflitos.length > 0) {
-        setFormErro('Horário reservado recentemente por outro usuário. Escolha outro horário.')
+        setFormErro(MSG_CONFLITO_CONCORRENCIA)
         setEnviando(false)
         await carregarOcupacoes()
         return
       }
-    }
-
-    const payload: Record<string, unknown> = {
-      [coluna]: idNum,
-      id_usuario: meuIdUsuario,
-      inicio: pendingSlot.inicio.toISOString(),
-      fim: pendingSlot.fim.toISOString(),
-      status: 'pendente',
-    }
-
-    if (tipo === 'sala') {
-      payload.motivo = motivo || null
-      payload.quantidade_pessoas = qtdPessoas
-      payload.observacao = observacao || null
     } else {
-      payload.quantidade = qtdEquipamento
-      payload.observacao = observacao || null
-      payload.status_devolucao = 'pendente'
+      // Para equipamento, verifica em tempo real se o estoque restante comporta a solicitação
+      const { data: conflitosEquip } = await supabase
+        .from('reservas_equipamentos')
+        .select('quantidade, inicio, fim')
+        .eq('id_equipamento', idNum)
+        .in('status', ['pendente', 'aprovada'])
+        .lt('inicio', slotFimISO)
+        .gt('fim', slotInicioISO)
+
+      if (conflitosEquip && conflitosEquip.length > 0) {
+        const totalUso = conflitosEquip.reduce(
+          (acc, o: any) => acc + (o.quantidade ? Number(o.quantidade) : 1),
+          0
+        )
+        if (totalUso + qtdEquipamento > estoqueTotal) {
+          setFormErro(MSG_CONFLITO_CONCORRENCIA)
+          setEnviando(false)
+          await carregarOcupacoes()
+          return
+        }
+      }
     }
 
-    const { error } = await supabase.from(tabela).insert(payload)
-    setEnviando(false)
+    // 2. Tenta invocar a RPC com bloqueio pessimista (FOR UPDATE)
+    const { error: rpcError } = await supabase.rpc('solicitar_reserva', {
+      p_tipo: tipo,
+      p_id_recurso: idNum,
+      p_id_usuario: meuIdUsuario,
+      p_inicio: slotInicioISO,
+      p_fim: slotFimISO,
+      p_motivo: tipo === 'sala' ? motivo || null : null,
+      p_quantidade_pessoas: tipo === 'sala' ? qtdPessoas : null,
+      p_quantidade_equipamento: tipo === 'equipamento' ? qtdEquipamento : null,
+      p_observacao: observacao || null,
+    })
 
-    if (error) {
-      if (error.code === '23P01' || error.message.toLowerCase().includes('exclu')) {
-        setFormErro('Horário reservado recentemente por outro usuário ou estoque esgotado.')
-      } else {
-        setFormErro(error.message)
-      }
+    if (!rpcError) {
+      setEnviando(false)
+      setSucesso(true)
+      await carregarOcupacoes()
+      await carregarRecurso()
+      setTimeout(() => {
+        setPendingSlot(null)
+        setSucesso(false)
+        setMotivo('')
+        setObservacao('')
+        setQtdPessoas(1)
+        setQtdEquipamento(1)
+      }, 1600)
+      return
+    }
+
+    // Se houve erro de concorrência na RPC
+    if (isErroConcorrencia(rpcError)) {
+      setEnviando(false)
+      setFormErro(MSG_CONFLITO_CONCORRENCIA)
       await carregarOcupacoes()
       return
     }
 
-    setSucesso(true)
+    // Se a RPC ainda não existe no Supabase (fallback para INSERT direto)
+    const isRpcNaoExiste =
+      rpcError.message.includes('function') ||
+      rpcError.message.includes('not found') ||
+      rpcError.code === '42883'
+
+    if (isRpcNaoExiste) {
+      const payload: Record<string, unknown> = {
+        [coluna]: idNum,
+        id_usuario: meuIdUsuario,
+        inicio: slotInicioISO,
+        fim: slotFimISO,
+        status: 'pendente',
+      }
+
+      if (tipo === 'sala') {
+        payload.motivo = motivo || null
+        payload.quantidade_pessoas = qtdPessoas
+        payload.observacao = observacao || null
+      } else {
+        payload.quantidade = qtdEquipamento
+        payload.observacao = observacao || null
+        payload.status_devolucao = 'pendente'
+      }
+
+      const { error: insertError } = await supabase.from(tabela).insert(payload)
+      setEnviando(false)
+
+      if (insertError) {
+        if (isErroConcorrencia(insertError)) {
+          setFormErro(MSG_CONFLITO_CONCORRENCIA)
+        } else {
+          setFormErro(insertError.message)
+        }
+        await carregarOcupacoes()
+        return
+      }
+
+      setSucesso(true)
+      await carregarOcupacoes()
+      await carregarRecurso()
+      setTimeout(() => {
+        setPendingSlot(null)
+        setSucesso(false)
+        setMotivo('')
+        setObservacao('')
+        setQtdPessoas(1)
+        setQtdEquipamento(1)
+      }, 1600)
+      return
+    }
+
+    // Outro erro na RPC
+    setEnviando(false)
+    setFormErro(rpcError.message)
     await carregarOcupacoes()
-    await carregarRecurso()
-    setTimeout(() => {
-      setPendingSlot(null)
-      setSucesso(false)
-      setMotivo('')
-      setObservacao('')
-      setQtdPessoas(1)
-      setQtdEquipamento(1)
-    }, 1600)
   }
 
   if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 font-mono text-sm text-(--color-ink-soft)">carregando…</p>
