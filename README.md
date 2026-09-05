@@ -31,6 +31,22 @@ supabase/sql/exclusao_conta.sql
 
 Ele cria a RPC `public.excluir_minha_conta()`, que é executada pelo próprio usuário autenticado de forma segura (`SECURITY DEFINER`). Caso ainda não tenha sido rodado, o front-end possui um fallback automático para realizar os cancelamentos e a anonimização.
 
+### ⚡ Prevenção de Concorrência e Bloqueio de Cliques Simultâneos (US09 / RF04)
+
+Para garantir que cliques simultâneos nunca gerem reservas duplicadas de salas ou estouro de estoque de equipamentos, execute no SQL Editor do Supabase:
+
+```
+supabase/sql/prevencao_concorrencia.sql
+```
+
+Ele ativa:
+- **Pessimistic Locking (`FOR UPDATE`)** nas tabelas de recursos (`salas` e `equipamentos`) para serializar transações no mesmo milissegundo.
+- **Triggers `BEFORE INSERT OR UPDATE`** em `reservas_salas` e `reservas_equipamentos` que impedem sobreposição de intervalos em reservas ativas (`pendente` e `aprovada`), lançando a mensagem de erro padronizada:
+  `"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."`
+- **Exclusion Constraint** (`reservas_salas_sem_sobreposicao`) via extensão `btree_gist` para integridade no motor de armazenamento.
+- **RPC `solicitar_reserva`** para solicitação transacional com locks em nível de linha.
+- **Sincronização Realtime** na tela de agendamento para atualização imediata dos horários ocupados.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -130,7 +146,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 
 - **Bloqueio por status do recurso** (`RecursoAgenda.tsx`): se a sala/equipamento estiver `ocupado` ou `manutencao`, a grade de horários nem aparece — mostra um aviso e não permite solicitar reserva, independentemente do horário.
 - **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
-- **Conflito de horário**: checagem client-side antes do insert + tratamento do erro `23P01` (caso a `EXCLUDE CONSTRAINT` do item 6 do SQL esteja aplicada).
+- **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
 ## Área do Usuário & Perfil
 
