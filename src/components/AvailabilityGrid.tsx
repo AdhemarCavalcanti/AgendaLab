@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export interface Ocupacao {
   inicio: string | Date
@@ -6,6 +6,7 @@ export interface Ocupacao {
   status: string
   mine?: boolean
   quantidade?: number
+  motivo?: string
 }
 
 interface Props {
@@ -48,13 +49,29 @@ export function AvailabilityGrid({
 
   const now = new Date()
 
+  useEffect(() => {
+    setSelected([])
+  }, [date, ocupacoes])
+
   function statusOfHour(hour: number): {
-    kind: 'passado' | 'livre' | 'pendente' | 'aprovada' | 'esgotado'
+    kind: 'passado' | 'livre' | 'pendente' | 'aprovada' | 'esgotado' | 'manutencao'
     mine?: boolean
     qtdEmUso: number
+    motivo?: string
   } {
     const slotStart = sameSlot(date, hour)
     const slotEnd = sameSlot(date, hour + 1)
+
+    const manutencao = ocupacoes.find((o) => {
+      if (o.status.toLowerCase() !== 'manutencao') return false
+      const oStart = o.inicio instanceof Date ? o.inicio : new Date(o.inicio)
+      const oEnd = o.fim instanceof Date ? o.fim : new Date(o.fim)
+      return slotStart.getTime() < oEnd.getTime() && slotEnd.getTime() > oStart.getTime()
+    })
+
+    if (manutencao) {
+      return { kind: 'manutencao', qtdEmUso: 0, motivo: manutencao.motivo }
+    }
 
     if (slotStart.getTime() < now.getTime()) return { kind: 'passado', qtdEmUso: 0 }
 
@@ -125,6 +142,7 @@ export function AvailabilityGrid({
           <Legend color="bg-white border border-dashed border-(--color-cyan)" label="livre" />
           <Legend color="bg-(--color-amber)" label="pendente" />
           <Legend color="bg-(--color-cyan)" label="aprovada" />
+          <Legend color="bg-(--color-amber-soft) border border-(--color-amber)" label="manutenção" />
         </div>
       </div>
 
@@ -138,6 +156,8 @@ export function AvailabilityGrid({
             'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono select-none'
           if (st.kind === 'passado') {
             cls += ' border-transparent bg-black/[0.03] text-(--color-ink-soft)/50 cursor-not-allowed'
+          } else if (st.kind === 'manutencao') {
+            cls += ' border-(--color-amber) bg-(--color-amber-soft) text-(--color-amber) cursor-not-allowed'
           } else if (st.kind === 'esgotado') {
             cls += ' border-(--color-coral)/30 bg-(--color-coral-soft) text-(--color-coral) cursor-not-allowed'
           } else if (st.kind === 'aprovada') {
@@ -164,6 +184,7 @@ export function AvailabilityGrid({
               <span>{hourLabel(h)} – {hourLabel(h + 1)}</span>
               <span className="text-[11px] opacity-80">
                 {st.kind === 'passado' && 'indisponível'}
+                {st.kind === 'manutencao' && `em manutenção · ${st.motivo}`}
                 {st.kind === 'esgotado' && 'esgotado'}
                 {st.kind === 'aprovada' && (st.mine ? 'sua reserva' : 'ocupado')}
                 {st.kind === 'pendente' && (st.mine ? 'sua solicitação' : 'em análise')}

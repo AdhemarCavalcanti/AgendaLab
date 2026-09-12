@@ -47,6 +47,24 @@ Ele ativa:
 - **RPC `solicitar_reserva`** para solicitação transacional com locks em nível de linha.
 - **Sincronização Realtime** na tela de agendamento para atualização imediata dos horários ocupados.
 
+### 🛠️ Interdições por período
+
+Para permitir que o responsável bloqueie uma sala ou equipamento em uma faixa de data/hora com justificativa pública, execute **depois** do script de prevenção de concorrência:
+
+```text
+supabase/sql/bloqueios_manutencao.sql
+```
+
+O script cria `bloqueios_manutencao`, aplica RLS (leitura pública e escrita somente pelo administrador autenticado), adiciona a tabela ao Realtime e substitui as triggers de reserva para rejeitar no banco qualquer intervalo que coincida com uma interdição. A proteção também vale para a RPC `solicitar_reserva` e para o fallback de inserção direta.
+
+Depois, aplique a atualização que trata reservas já existentes:
+
+```text
+supabase/sql/migracao_cancelamento_reservas_manutencao.sql
+```
+
+Ela cria a RPC transacional `interditar_recurso_manutencao`. Quando há reservas pendentes ou aprovadas no intervalo, o painel mostra os usuários afetados e exige confirmação. Após a confirmação, a interdição é criada, as reservas são canceladas e os usuários recebem uma notificação com a justificativa. Se `bloqueios_manutencao.sql` já foi executado anteriormente, execute somente esta nova migração.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -86,6 +104,16 @@ erDiagram
         text regras_uso
         integer quantidade_manutencao
     }
+    bloqueios_manutencao {
+        bigint id PK
+        bigint id_sala FK
+        bigint id_equipamento FK
+        bigint id_adm FK
+        timestamptz inicio
+        timestamptz fim
+        text motivo
+        timestamptz criado_em
+    }
     reservas_salas {
         bigint id PK
         bigint id_usuario FK
@@ -118,6 +146,9 @@ erDiagram
     equipamentos ||--o{ reservas_equipamentos : "reservado_em"
     administradores ||--o{ reservas_salas : "gerencia"
     administradores ||--o{ reservas_equipamentos : "gerencia"
+    salas ||--o{ bloqueios_manutencao : "interditada_em"
+    equipamentos ||--o{ bloqueios_manutencao : "interditado_em"
+    administradores ||--o{ bloqueios_manutencao : "registra"
 ```
 
 ## Como rodar
@@ -145,6 +176,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 ## Regras de reserva implementadas
 
 - **Bloqueio por status do recurso** (`RecursoAgenda.tsx`): se a sala/equipamento estiver `ocupado` ou `manutencao`, a grade de horários nem aparece — mostra um aviso e não permite solicitar reserva, independentemente do horário.
+- **Interdição por período**: o administrador informa início, fim e justificativa obrigatória; as horas aparecem em laranja no calendário com o motivo, não podem ser selecionadas e são recusadas novamente pelas triggers do PostgreSQL em caso de concorrência ou chamada direta à API. Reservas ativas já existentes são apresentadas para confirmação, canceladas atomicamente e notificadas com a justificativa.
 - **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
@@ -159,7 +191,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 
 ## Painel do administrador
 
-- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status)
+- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status) e gestão de interdições atuais/futuras por período
 - `/admin/aprovacoes` — fila de solicitações pendentes, com **aviso visual em tempo real** (Supabase Realtime nas tabelas `reservas_salas`/`reservas_equipamentos`) quando chega uma nova solicitação ou uma reserva muda de status
 - `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status
 - `/admin/usuarios` — pré-cadastro de alunos/administradores + lista de pendentes e contas ativas
