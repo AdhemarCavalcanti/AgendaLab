@@ -54,42 +54,72 @@ declare
   v_tipo_recurso text;
   v_titulo text;
   v_mensagem text;
+  v_motivo_manutencao text;
+  v_inicio_formatado text;
+  v_fim_formatado text;
 begin
-  -- Dispara apenas quando o status transiciona de 'pendente' para 'aprovada' ou 'cancelada'
-  if (OLD.status = 'pendente' and NEW.status in ('aprovada', 'cancelada')) then
-    
-    -- Identificar se é sala ou equipamento
-    if TG_TABLE_NAME = 'reservas_salas' then
-      v_tipo_recurso := 'sala';
-      select nome into v_nome_recurso from public.salas where id_sala = NEW.id_sala;
-    else
-      v_tipo_recurso := 'equipamento';
-      select nome into v_nome_recurso from public.equipamentos where id = NEW.id_equipamento;
-    end if;
+  if not (
+    (OLD.status = 'pendente' and NEW.status = 'aprovada')
+    or (OLD.status in ('pendente', 'aprovada') and NEW.status = 'cancelada')
+  ) then
+    return NEW;
+  end if;
 
-    -- Definir título
-    if NEW.status = 'aprovada' then
-      v_titulo := 'Solicitação Aprovada';
-      v_mensagem := 'Sua solicitação de reserva da ' || v_tipo_recurso || ' "' || v_nome_recurso || 
-                    '" para o período de ' || to_char(NEW.inicio - interval '3 hours', 'DD/MM HH24:mi') || 
-                    ' a ' || to_char(NEW.fim - interval '3 hours', 'DD/MM HH24:mi') || ' foi APROVADA!';
+  if TG_TABLE_NAME = 'reservas_salas' then
+    v_tipo_recurso := 'sala';
+    select nome into v_nome_recurso
+    from public.salas
+    where id_sala = NEW.id_sala;
+  else
+    v_tipo_recurso := 'equipamento';
+    select nome into v_nome_recurso
+    from public.equipamentos
+    where id = NEW.id_equipamento;
+  end if;
+
+  v_inicio_formatado := to_char(
+    NEW.inicio at time zone 'America/Sao_Paulo',
+    'DD/MM/YYYY HH24:MI'
+  );
+  v_fim_formatado := to_char(
+    NEW.fim at time zone 'America/Sao_Paulo',
+    'DD/MM/YYYY HH24:MI'
+  );
+
+  if NEW.status = 'aprovada' then
+    v_titulo := 'Solicitação aprovada';
+    v_mensagem := 'Sua solicitação de reserva de ' || v_tipo_recurso || ' "' ||
+      v_nome_recurso || '" para o período de ' || v_inicio_formatado || ' a ' ||
+      v_fim_formatado || ' foi aprovada.';
+  else
+    v_motivo_manutencao := nullif(
+      current_setting('agendalab.motivo_manutencao', true),
+      ''
+    );
+
+    if v_motivo_manutencao is not null then
+      v_titulo := 'Reserva cancelada por manutenção';
+      v_mensagem := 'Sua reserva de ' || v_tipo_recurso || ' "' ||
+        v_nome_recurso || '" para o período de ' || v_inicio_formatado || ' a ' ||
+        v_fim_formatado || ' foi cancelada devido a uma manutenção. Justificativa: "' ||
+        v_motivo_manutencao || '".';
     else
-      v_titulo := 'Solicitação Rejeitada';
-      v_mensagem := 'Sua solicitação de reserva da ' || v_tipo_recurso || ' "' || v_nome_recurso || 
-                    '" para o período de ' || to_char(NEW.inicio - interval '3 hours', 'DD/MM HH24:mi') || 
-                    ' a ' || to_char(NEW.fim - interval '3 hours', 'DD/MM HH24:mi') || ' foi REJEITADA.';
-      
-      -- Exibir o motivo/justificativa
-      if NEW.motivo is not null and NEW.motivo <> '' then
-        v_mensagem := v_mensagem || ' Justificativa: "' || NEW.motivo || '"';
+      v_titulo := case
+        when OLD.status = 'pendente' then 'Solicitação rejeitada'
+        else 'Reserva cancelada'
+      end;
+      v_mensagem := 'Sua reserva de ' || v_tipo_recurso || ' "' ||
+        v_nome_recurso || '" para o período de ' || v_inicio_formatado || ' a ' ||
+        v_fim_formatado || ' foi cancelada.';
+
+      if nullif(btrim(NEW.motivo), '') is not null then
+        v_mensagem := v_mensagem || ' Justificativa: "' || btrim(NEW.motivo) || '".';
       end if;
     end if;
-
-    -- Inserir a notificação na tabela
-    insert into public.notificacoes (id_usuario, titulo, mensagem, lida)
-    values (NEW.id_usuario, v_titulo, v_mensagem, false);
-
   end if;
+
+  insert into public.notificacoes (id_usuario, titulo, mensagem, lida)
+  values (NEW.id_usuario, v_titulo, v_mensagem, false);
 
   return NEW;
 end;

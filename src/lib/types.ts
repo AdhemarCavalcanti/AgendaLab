@@ -33,6 +33,17 @@ export interface Equipamento {
   status: StatusRecurso
 }
 
+export interface BloqueioManutencao {
+  id: number
+  id_sala: number | null
+  id_equipamento: number | null
+  id_adm: number | null
+  inicio: string
+  fim: string
+  motivo: string
+  criado_em: string
+}
+
 export interface ReservaSala {
   id: number
   id_sala: number

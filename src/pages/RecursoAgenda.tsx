@@ -28,6 +28,8 @@ const STATUS_MSG: Record<string, string> = {
 const MSG_CONFLITO_CONCORRENCIA =
   'Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período.'
 
+const MSG_MANUTENCAO = 'Este recurso está em manutenção no período selecionado. Escolha outro horário.'
+
 function isErroConcorrencia(error: any): boolean {
   if (!error) return false
   const code = error.code
@@ -43,6 +45,11 @@ function isErroConcorrencia(error: any): boolean {
     msg.includes('conflito') ||
     msg.includes('exclusion')
   )
+}
+
+function isErroManutencao(error: any): boolean {
+  const msg = (error?.message || '').toLowerCase()
+  return msg.includes('manutenção no período') || msg.includes('manutencao no periodo')
 }
 
 export function RecursoAgenda() {
@@ -99,16 +106,28 @@ export function RecursoAgenda() {
 
     const selectFields = tipo === 'equipamento' ? 'inicio, fim, status, id_usuario, quantidade' : 'inicio, fim, status, id_usuario'
 
-    const { data, error } = await supabase
+    const reservasPromise = supabase
       .from(tabela)
       .select(selectFields)
       .eq(coluna, idNum)
       .in('status', ['pendente', 'aprovada'])
-      .gte('inicio', inicioJanela.toISOString())
-      .lte('inicio', fimJanela.toISOString())
+      .lt('inicio', fimJanela.toISOString())
+      .gt('fim', inicioJanela.toISOString())
 
-    if (!error && data) {
-      const listaFormatada: Ocupacao[] = (data as any[]).map((o) => ({
+    let bloqueiosQuery = supabase
+      .from('bloqueios_manutencao')
+      .select('inicio, fim, motivo')
+      .lt('inicio', fimJanela.toISOString())
+      .gt('fim', inicioJanela.toISOString())
+
+    bloqueiosQuery = tipo === 'sala'
+      ? bloqueiosQuery.eq('id_sala', idNum)
+      : bloqueiosQuery.eq('id_equipamento', idNum)
+
+    const [reservasResult, bloqueiosResult] = await Promise.all([reservasPromise, bloqueiosQuery])
+
+    if (!reservasResult.error && !bloqueiosResult.error) {
+      const reservasFormatadas: Ocupacao[] = ((reservasResult.data ?? []) as any[]).map((o) => ({
         inicio: o.inicio,
         fim: o.fim,
         status: o.status,
@@ -116,7 +135,14 @@ export function RecursoAgenda() {
         quantidade: o.quantidade ? Number(o.quantidade) : 1,
       }))
 
-      setOcupacoes(listaFormatada)
+      const bloqueiosFormatados: Ocupacao[] = ((bloqueiosResult.data ?? []) as any[]).map((bloqueio) => ({
+        inicio: bloqueio.inicio,
+        fim: bloqueio.fim,
+        status: 'manutencao',
+        motivo: bloqueio.motivo,
+      }))
+
+      setOcupacoes([...reservasFormatadas, ...bloqueiosFormatados])
     }
   }
 
@@ -142,6 +168,17 @@ export function RecursoAgenda() {
           carregarOcupacoes()
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bloqueios_manutencao',
+        },
+        () => {
+          carregarOcupacoes()
+        }
+      )
       .subscribe()
 
     return () => {
@@ -156,6 +193,15 @@ export function RecursoAgenda() {
 
     const inicioSlot = pendingSlot.inicio.getTime()
     const fimSlot = pendingSlot.fim.getTime()
+
+    const emManutencao = ocupacoes.some((o) => {
+      if (o.status.toLowerCase() !== 'manutencao') return false
+      const oStart = new Date(o.inicio).getTime()
+      const oEnd = new Date(o.fim).getTime()
+      return inicioSlot < oEnd && fimSlot > oStart
+    })
+
+    if (emManutencao) return 0
 
     let maxUsoNoIntervalo = 0
 
@@ -207,6 +253,32 @@ export function RecursoAgenda() {
 
     const slotInicioISO = pendingSlot.inicio.toISOString()
     const slotFimISO = pendingSlot.fim.toISOString()
+
+    let bloqueiosQuery = supabase
+      .from('bloqueios_manutencao')
+      .select('motivo')
+      .lt('inicio', slotFimISO)
+      .gt('fim', slotInicioISO)
+      .limit(1)
+
+    bloqueiosQuery = tipo === 'sala'
+      ? bloqueiosQuery.eq('id_sala', idNum)
+      : bloqueiosQuery.eq('id_equipamento', idNum)
+
+    const { data: bloqueios, error: erroBloqueios } = await bloqueiosQuery
+
+    if (erroBloqueios) {
+      setFormErro('Não foi possível validar a disponibilidade do recurso. Tente novamente.')
+      setEnviando(false)
+      return
+    }
+
+    if (bloqueios && bloqueios.length > 0) {
+      setFormErro(`${MSG_MANUTENCAO} Motivo: ${bloqueios[0].motivo}`)
+      setEnviando(false)
+      await carregarOcupacoes()
+      return
+    }
 
     // 1. Verificação prévia de conflito em tempo real antes de persistir
     if (tipo === 'sala') {
@@ -278,6 +350,13 @@ export function RecursoAgenda() {
     }
 
     // Se houve erro de concorrência na RPC
+    if (isErroManutencao(rpcError)) {
+      setEnviando(false)
+      setFormErro(rpcError.message || MSG_MANUTENCAO)
+      await carregarOcupacoes()
+      return
+    }
+
     if (isErroConcorrencia(rpcError)) {
       setEnviando(false)
       setFormErro(MSG_CONFLITO_CONCORRENCIA)
@@ -314,7 +393,9 @@ export function RecursoAgenda() {
       setEnviando(false)
 
       if (insertError) {
-        if (isErroConcorrencia(insertError)) {
+        if (isErroManutencao(insertError)) {
+          setFormErro(insertError.message || MSG_MANUTENCAO)
+        } else if (isErroConcorrencia(insertError)) {
           setFormErro(MSG_CONFLITO_CONCORRENCIA)
         } else {
           setFormErro(insertError.message)
