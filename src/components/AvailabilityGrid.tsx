@@ -77,18 +77,18 @@ export function AvailabilityGrid({
       }
     }
 
-    // 1. Se atingiu ou ultrapassou a capacidade total do estoque
-    if (qtdEmUso >= totalEstoque) {
-      return { kind: 'esgotado', mine: temMinhaOcupacao, qtdEmUso }
-    }
-
-    // 2. Para SALAS (não equipamento): qualquer ocupação bloqueia o slot
+    // 1. Para SALAS (não equipamento): qualquer ocupação bloqueia o slot com o status da reserva
     if (!isEquipamento && qtdEmUso > 0) {
       return {
         kind: statusPredominante as 'pendente' | 'aprovada',
         mine: temMinhaOcupacao,
         qtdEmUso,
       }
+    }
+
+    // 2. Para EQUIPAMENTOS: se atingiu ou ultrapassou a capacidade total do estoque
+    if (isEquipamento && qtdEmUso >= totalEstoque) {
+      return { kind: 'esgotado', mine: temMinhaOcupacao, qtdEmUso }
     }
 
     // 3. Para EQUIPAMENTOS com estoque restante: o slot permanece LIVRE e Clicável

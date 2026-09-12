@@ -67,14 +67,14 @@ export function MinhasReservas() {
         .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
       supabase.from('salas').select('id_sala, nome'),
-      supabase.from('equipamentos').select('id_equipamento, nome'),
+      supabase.from('equipamentos').select('id, nome'),
     ])
 
     const mapaSalas = new Map<number, string>(
       (resListaSalas.data ?? []).map((s: any) => [s.id_sala, s.nome])
     )
     const mapaEquip = new Map<number, string>(
-      (resListaEquip.data ?? []).map((e: any) => [e.id_equipamento, e.nome])
+      (resListaEquip.data ?? []).map((e: any) => [e.id, e.nome])
     )
 
     const itensSalas: Item[] = (resSalas.data ?? []).map((r: any) => ({
