@@ -12,10 +12,13 @@ export function AdminGestaoUsuarios() {
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
   
+  
   // Estado para o filtro de pesquisa
   const [busca, setBusca] = useState('')
 
   const [modalAberto, setModalAberto] = useState(false)
+  const isPremium = localStorage.getItem('agendalab_plano') === 'premium';
+  const limiteAdminsAtingido = !isPremium && aba === 'administradores' && administradores.length >= 1;// Trava de monetização: limite de 1 admin no plano grátis
 
   async function carregar() {
     setLoading(true)
@@ -88,9 +91,22 @@ export function AdminGestaoUsuarios() {
           <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
           <h1 className="font-display text-3xl font-bold">Gestão de usuários</h1>
         </div>
-        <button className="btn-primary" onClick={() => setModalAberto(true)}>
-          + pré-cadastrar {aba === 'usuarios' ? 'aluno' : 'administrador'}
-        </button>
+        
+        <div className="flex flex-col items-end gap-1">
+          <button 
+            className="btn-primary" 
+            onClick={() => setModalAberto(true)}
+            disabled={limiteAdminsAtingido}
+          >
+            + pré-cadastrar {aba === 'usuarios' ? 'aluno' : 'administrador'}
+          </button>
+          
+          {limiteAdminsAtingido && (
+            <span className="text-[10px] text-(--color-amber) font-medium max-w-[200px] text-right leading-tight">
+              Múltiplos administradores é um recurso Premium. <a href="/admin/planos" className="underline">Fazer upgrade</a>.
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -18,6 +18,7 @@ export function AdminDashboard() {
   const [salas, setSalas] = useState<Sala[]>([])
   const [equipamentos, setEquipamentos] = useState<Equipamento[]>([])
   const [loading, setLoading] = useState(true)
+  const isPremium = localStorage.getItem('agendalab_plano') === 'premium';// Trava de monetização: verifica o plano atual
 
   useEffect(() => {
     async function load() {
@@ -117,13 +118,20 @@ export function AdminDashboard() {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-display text-3xl font-bold">Dashboard &amp; métricas</h1>
         
-        <button 
-          onClick={exportarParaCSV}
-          className="btn-secondary text-xs"
-          disabled={ocupacaoPorRecurso.length === 0}
-        >
-          ↓ exportar planilha (csv)
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button 
+            onClick={exportarParaCSV}
+            className="btn-secondary text-xs"
+            disabled={!isPremium || ocupacaoPorRecurso.length === 0}
+          >
+            ↓ exportar planilha (csv)
+          </button>
+          {!isPremium && (
+            <span className="text-[10px] text-(--color-amber) font-medium">
+              Recurso Premium. <a href="/admin/planos" className="underline">Fazer upgrade</a>.
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">

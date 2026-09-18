@@ -12,6 +12,7 @@ import { AdminReservas } from './pages/admin/Reservas'
 import { AdminGestaoUsuarios } from './pages/admin/GestaoUsuarios'
 import { AdminDashboard } from './pages/admin/Dashboard'
 import { Perfil } from './pages/Perfil'
+import { AdminPlanos } from './pages/admin/Planos'
 
 export default function App() {
   return (
@@ -77,6 +78,14 @@ export default function App() {
                 element={
                   <ProtectedRoute allow={['admin']}>
                     <AdminDashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/planos"
+                element={
+                  <ProtectedRoute allow={['admin']}>
+                    <AdminPlanos />
                   </ProtectedRoute>
                 }
               />
