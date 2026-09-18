@@ -37,6 +37,8 @@ public,reservas_equipamentos,observacao,text,YES,
 public,reservas_equipamentos,status_devolucao,USER-DEFINED,NO,
 public,reservas_equipamentos,motivo,text,YES,
 public,reservas_equipamentos,quantidade,integer,YES,
+public,reservas_equipamentos,cancelada_por_administracao,boolean,NO,
+public,reservas_equipamentos,justificativa_cancelamento,text,YES,
 public,reservas_salas,id,bigint,NO,PRIMARY KEY
 public,reservas_salas,id_usuario,bigint,NO,FOREIGN KEY
 public,reservas_salas,id_sala,bigint,NO,
@@ -47,6 +49,8 @@ public,reservas_salas,status,USER-DEFINED,NO,
 public,reservas_salas,motivo,text,YES,
 public,reservas_salas,quantidade_pessoas,integer,YES,
 public,reservas_salas,observacao,text,YES,
+public,reservas_salas,cancelada_por_administracao,boolean,NO,
+public,reservas_salas,justificativa_cancelamento,text,YES,
 public,salas,id_sala,bigint,NO,PRIMARY KEY
 public,salas,nome,text,NO,
 public,salas,lotacao,integer,NO,

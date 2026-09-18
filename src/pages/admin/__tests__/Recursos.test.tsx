@@ -8,6 +8,7 @@ import { supabase } from '../../../lib/supabase'
 vi.mock('../../../lib/supabase', () => ({
   supabase: {
     from: vi.fn(),
+    rpc: vi.fn(),
   },
 }))
 
@@ -31,6 +32,10 @@ describe('AdminRecursos Page', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { sucesso: true, reservas_canceladas: 0 },
+      error: null,
+    } as any)
 
     vi.mocked(supabase.from).mockImplementation((table: string) => {
       if (table === 'salas') {
@@ -50,6 +55,16 @@ describe('AdminRecursos Page', () => {
             eq: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         } as any
+      }
+      if (table === 'bloqueios_manutencao') {
+        const query: any = {
+          select: vi.fn(() => query),
+          gte: vi.fn(() => query),
+          order: vi.fn().mockResolvedValue({ data: [], error: null }),
+          delete: vi.fn(() => query),
+          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }
+        return query
       }
       return {
         select: vi.fn().mockReturnThis(),
@@ -78,8 +93,33 @@ describe('AdminRecursos Page', () => {
     expect(screen.queryByText('Sala A')).not.toBeInTheDocument()
   })
 
-  it('permite alternar status de manutenção de uma sala', async () => {
+  it('interdita turnos, confirma as reservas afetadas e envia a justificativa pública', async () => {
     const user = userEvent.setup()
+
+    vi.mocked(supabase.rpc)
+      .mockResolvedValueOnce({
+        data: {
+          sucesso: false,
+          requer_confirmacao: true,
+          reservas_afetadas: [
+            {
+              id: 101,
+              status: 'aprovada',
+              inicio: '2026-11-10T10:00:00.000Z',
+              fim: '2026-11-10T12:00:00.000Z',
+              usuario_nome: 'Aluno Afetado',
+              usuario_email: 'aluno@example.com',
+              usuario_matricula: '2026001',
+              quantidade: null,
+            },
+          ],
+        },
+        error: null,
+      } as any)
+      .mockResolvedValueOnce({
+        data: { sucesso: true, reservas_canceladas: 1 },
+        error: null,
+      } as any)
 
     render(
       <MemoryRouter>
@@ -89,11 +129,40 @@ describe('AdminRecursos Page', () => {
 
     await screen.findByText('Sala A')
 
-    // Botão de colocar em manutenção
-    const btnManutencao = screen.getAllByRole('button', { name: 'manutenção' })[0]
-    await user.click(btnManutencao)
+    await user.click(screen.getAllByRole('button', { name: /interdição emergencial/i })[0])
+    await user.click(screen.getByRole('checkbox', { name: /manhã/i }))
+    await user.click(screen.getByRole('checkbox', { name: /noite/i }))
+    await user.type(
+      screen.getByRole('textbox', { name: /justificativa pública/i }),
+      'Dedetização emergencial'
+    )
+    await user.click(screen.getByRole('button', { name: /continuar/i }))
 
-    expect(mockUpdateSalas).toHaveBeenCalledWith({ status: 'manutencao' })
+    expect(await screen.findByText('Aluno Afetado')).toBeInTheDocument()
+    expect(supabase.rpc).toHaveBeenNthCalledWith(1, 'interditar_recurso_emergencial', {
+      p_tipo: 'sala',
+      p_id_recurso: 1,
+      p_data: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      p_turnos: ['manha', 'noite'],
+      p_justificativa: 'Dedetização emergencial',
+      p_confirmar_cancelamento: false,
+      p_ids_reservas_confirmadas: null,
+    })
+
+    await user.click(screen.getByRole('button', { name: /confirmar interdição e avisar/i }))
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenNthCalledWith(2, 'interditar_recurso_emergencial', {
+        p_tipo: 'sala',
+        p_id_recurso: 1,
+        p_data: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        p_turnos: ['manha', 'noite'],
+        p_justificativa: 'Dedetização emergencial',
+        p_confirmar_cancelamento: true,
+        p_ids_reservas_confirmadas: [101],
+      })
+    })
+    expect(await screen.findByText(/1 reserva\(s\) cancelada\(s\)/i)).toBeInTheDocument()
   })
 
   it('permite abrir modal e cadastrar nova sala', async () => {
