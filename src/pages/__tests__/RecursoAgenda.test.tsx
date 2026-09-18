@@ -42,6 +42,23 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
     })
   }
 
+  function criarConsultaVazia() {
+    const query: any = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      in: vi.fn(() => query),
+      gte: vi.fn(() => query),
+      lte: vi.fn(() => query),
+      lt: vi.fn(() => query),
+      gt: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      then(resolve: (value: any) => any, reject?: (reason: any) => any) {
+        return Promise.resolve({ data: [], error: null }).then(resolve, reject)
+      },
+    }
+    return query
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -66,13 +83,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
           }),
         } as any
       }
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any
+      return criarConsultaVazia()
     })
 
     render(
@@ -104,13 +115,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
           }),
         } as any
       }
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any
+      return criarConsultaVazia()
     })
 
     render(
@@ -142,15 +147,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
         } as any
       }
       // Mock para a verificação de conflitos e listagem de ocupações
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-        lt: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any
+      return criarConsultaVazia()
     })
 
     // Mock RPC simulando erro PostgreSQL 23P01 de concorrência/exclusion constraint
@@ -219,15 +216,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
           }),
         } as any
       }
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-        lt: vi.fn().mockReturnThis(),
-        gt: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any
+      return criarConsultaVazia()
     })
 
     render(
@@ -276,13 +265,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
           }),
         } as any
       }
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        in: vi.fn().mockReturnThis(),
-        gte: vi.fn().mockReturnThis(),
-        lte: vi.fn().mockResolvedValue({ data: [], error: null }),
-      } as any
+      return criarConsultaVazia()
     })
 
     render(

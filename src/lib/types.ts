@@ -55,6 +55,8 @@ export interface ReservaSala {
   quantidade_pessoas: number | null
   observacao: string | null
   status: StatusReserva
+  cancelada_por_administracao: boolean
+  justificativa_cancelamento: string | null
 }
 
 export interface ReservaEquipamento {
@@ -66,6 +68,8 @@ export interface ReservaEquipamento {
   fim: string
   observacao: string | null
   status: StatusReserva
+  cancelada_por_administracao: boolean
+  justificativa_cancelamento: string | null
 }
 
 export type TipoRecurso = 'sala' | 'equipamento'

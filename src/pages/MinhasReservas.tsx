@@ -12,6 +12,8 @@ interface Item {
   fim: string
   status: StatusReserva
   extra?: string
+  canceladaPorAdministracao: boolean
+  justificativaCancelamento?: string
 }
 
 const FILTROS: { value: 'todas' | StatusReserva; label: string }[] = [
@@ -58,12 +60,12 @@ export function MinhasReservas() {
     const [resSalas, resEquip, resListaSalas, resListaEquip] = await Promise.all([
       supabase
         .from('reservas_salas')
-        .select('id, id_sala, inicio, fim, status, motivo, quantidade_pessoas')
+        .select('id, id_sala, inicio, fim, status, motivo, quantidade_pessoas, cancelada_por_administracao, justificativa_cancelamento')
         .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, status, observacao')
+        .select('id, id_equipamento, inicio, fim, status, observacao, cancelada_por_administracao, justificativa_cancelamento')
         .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
       supabase.from('salas').select('id_sala, nome'),
@@ -85,6 +87,8 @@ export function MinhasReservas() {
       fim: r.fim,
       status: r.status,
       extra: r.motivo ? `${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : undefined,
+      canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
+      justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
     }))
 
     const itensEquip: Item[] = (resEquip.data ?? []).map((r: any) => ({
@@ -95,6 +99,8 @@ export function MinhasReservas() {
       fim: r.fim,
       status: r.status,
       extra: r.observacao ?? undefined,
+      canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
+      justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
     }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime()))
@@ -153,13 +159,18 @@ export function MinhasReservas() {
                 <div>
                   <div className="mb-1 flex items-center gap-2">
                     <span className="font-mono text-[11px] uppercase tracking-wide text-(--color-ink-soft)">{item.tipo}</span>
-                    <StatusBadge status={item.status} />
+                    <StatusBadge status={item.canceladaPorAdministracao ? 'cancelada_administracao' : item.status} />
                   </div>
                   <p className="font-medium">{item.recursoNome}</p>
                   <p className="font-mono text-sm text-(--color-ink-soft)">
                     {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {item.extra && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.extra}</p>}
+                  {item.justificativaCancelamento && (
+                    <p className="mt-2 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
+                      Justificativa da Administração: {item.justificativaCancelamento}
+                    </p>
+                  )}
                 </div>
                 {podeCancelar && (
                   <button

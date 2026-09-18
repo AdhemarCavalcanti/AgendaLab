@@ -26,6 +26,9 @@ describe('StatusBadge Component', () => {
 
     rerender(<StatusBadge status="cancelada" tipo="reserva" />)
     expect(screen.getByText('Cancelada')).toBeInTheDocument()
+
+    rerender(<StatusBadge status="cancelada_administracao" tipo="reserva" />)
+    expect(screen.getByText('Cancelada pela Administração')).toBeInTheDocument()
   })
 
   it('renderiza fallback para status desconhecido', () => {

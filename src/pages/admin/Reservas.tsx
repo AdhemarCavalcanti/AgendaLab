@@ -13,6 +13,8 @@ interface Item {
   fim: string
   status: StatusReserva
   detalhe?: string
+  canceladaPorAdministracao: boolean
+  justificativaCancelamento?: string
 }
 
 // Filtros alinhados com o tipo 'StatusReserva' ('pendente', 'aprovada', 'cancelada')
@@ -53,12 +55,12 @@ export function AdminReservas() {
     // Prepara as consultas
     let querySalas = supabase
       .from('reservas_salas')
-      .select('id, id_sala, inicio, fim, status, motivo, quantidade_pessoas, id_usuario, usuarios(nome)')
+      .select('id, id_sala, inicio, fim, status, motivo, quantidade_pessoas, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome)')
       .order('inicio', { ascending: false })
 
     let queryEquip = supabase
       .from('reservas_equipamentos')
-      .select('id, id_equipamento, inicio, fim, status, observacao, id_usuario, usuarios(nome)')
+      .select('id, id_equipamento, inicio, fim, status, observacao, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome)')
       .order('inicio', { ascending: false })
 
     // Aplica o filtro se for usuário comum (aluno) e tivermos encontrado o idUsuarioLogado
@@ -92,6 +94,8 @@ export function AdminReservas() {
       fim: r.fim,
       status: r.status,
       detalhe: r.motivo ? `${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : undefined,
+      canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
+      justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
     }))
 
     const itensEquip: Item[] = (resEquip.data ?? []).map((r: any) => ({
@@ -103,6 +107,8 @@ export function AdminReservas() {
       fim: r.fim,
       status: r.status,
       detalhe: r.observacao ?? undefined,
+      canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
+      justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
     }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime()))
@@ -148,8 +154,14 @@ export function AdminReservas() {
       const solicitante = `"${item.usuarioNome}"`
       const inicio = `"${new Date(item.inicio).toLocaleString('pt-BR')}"`
       const fim = `"${new Date(item.fim).toLocaleString('pt-BR')}"`
-      const status = `"${item.status}"`
-      const detalhe = `"${item.detalhe ? item.detalhe.replace(/"/g, '""') : ''}"` // Evita quebra se tiver aspas no texto
+      const status = `"${item.canceladaPorAdministracao ? 'Cancelada pela Administração' : item.status}"`
+      const detalhes = [
+        item.detalhe,
+        item.justificativaCancelamento
+          ? `Justificativa da Administração: ${item.justificativaCancelamento}`
+          : undefined,
+      ].filter(Boolean).join(' · ')
+      const detalhe = `"${detalhes.replace(/"/g, '""')}"` // Evita quebra se tiver aspas no texto
 
       if (role === 'admin') {
         csv += `${recurso},${tipo},${solicitante},${inicio},${fim},${status},${detalhe}\n`
@@ -243,6 +255,11 @@ export function AdminReservas() {
                     <p className="font-medium">{item.recursoNome}</p>
                     <p className="font-mono text-xs uppercase text-(--color-ink-soft)">{item.tipo}</p>
                     {item.detalhe && <p className="mt-1 text-xs text-(--color-ink-soft)">{item.detalhe}</p>}
+                    {item.justificativaCancelamento && (
+                      <p className="mt-1 text-xs text-(--color-coral)">
+                        Justificativa da Administração: {item.justificativaCancelamento}
+                      </p>
+                    )}
                   </td>
                   {role === 'admin' && <td className="px-4 py-3">{item.usuarioNome}</td>}
                   <td className="px-4 py-3 font-mono text-xs">
@@ -252,7 +269,7 @@ export function AdminReservas() {
                     {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={item.status} />
+                    <StatusBadge status={item.canceladaPorAdministracao ? 'cancelada_administracao' : item.status} />
                   </td>
                 </tr>
               ))}

@@ -65,6 +65,14 @@ supabase/sql/migracao_cancelamento_reservas_manutencao.sql
 
 Ela cria a RPC transacional `interditar_recurso_manutencao`. Quando há reservas pendentes ou aprovadas no intervalo, o painel mostra os usuários afetados e exige confirmação. Após a confirmação, a interdição é criada, as reservas são canceladas e os usuários recebem uma notificação com a justificativa. Se `bloqueios_manutencao.sql` já foi executado anteriormente, execute somente esta nova migração.
 
+Para habilitar a ação de **Interdição Emergencial** por data e turnos, execute em seguida:
+
+```text
+supabase/sql/interdicao_emergencial.sql
+```
+
+A migração define os turnos manhã (07h–12h), tarde (12h–18h) e noite (18h–22h), cria a RPC transacional `interditar_recurso_emergencial` e registra em cada reserva a origem e a justificativa do cancelamento administrativo. Bloqueios, cancelamentos e alertas são gravados atomicamente; se qualquer etapa falhar, nenhuma alteração parcial é mantida.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -125,6 +133,8 @@ erDiagram
         text motivo
         integer quantidade_pessoas
         text observacao
+        boolean cancelada_por_administracao
+        text justificativa_cancelamento
     }
     reservas_equipamentos {
         bigint id PK
@@ -138,6 +148,8 @@ erDiagram
         text observacao
         text motivo
         integer quantidade
+        boolean cancelada_por_administracao
+        text justificativa_cancelamento
     }
 
     usuarios ||--o{ reservas_salas : "realiza"
@@ -176,7 +188,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 ## Regras de reserva implementadas
 
 - **Bloqueio por status do recurso** (`RecursoAgenda.tsx`): se a sala/equipamento estiver `ocupado` ou `manutencao`, a grade de horários nem aparece — mostra um aviso e não permite solicitar reserva, independentemente do horário.
-- **Interdição por período**: o administrador informa início, fim e justificativa obrigatória; as horas aparecem em laranja no calendário com o motivo, não podem ser selecionadas e são recusadas novamente pelas triggers do PostgreSQL em caso de concorrência ou chamada direta à API. Reservas ativas já existentes são apresentadas para confirmação, canceladas atomicamente e notificadas com a justificativa.
+- **Interdição emergencial**: o administrador escolhe a data e um ou mais turnos (manhã, tarde e noite), informa uma justificativa pública e revisa os usuários afetados. Na confirmação, os períodos são bloqueados, todas as reservas ativas são marcadas como “Cancelada pela Administração” e os usuários recebem alertas automáticos — tudo na mesma transação.
 - **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
@@ -191,7 +203,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 
 ## Painel do administrador
 
-- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status) e gestão de interdições atuais/futuras por período
+- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status) e gestão de interdições emergenciais por data e turnos
 - `/admin/aprovacoes` — fila de solicitações pendentes, com **aviso visual em tempo real** (Supabase Realtime nas tabelas `reservas_salas`/`reservas_equipamentos`) quando chega uma nova solicitação ou uma reserva muda de status
 - `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status
 - `/admin/usuarios` — pré-cadastro de alunos/administradores + lista de pendentes e contas ativas

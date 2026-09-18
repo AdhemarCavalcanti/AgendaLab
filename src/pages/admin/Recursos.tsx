@@ -8,6 +8,7 @@ type SalaComRegras = Sala & { regras_uso?: string }
 type EquipamentoComRegras = Equipamento & { regras_uso?: string; quantidade_manutencao?: number }
 type RecursoComRegras = SalaComRegras | EquipamentoComRegras
 type AlvoBloqueio = { tipo: TipoRecurso; item: RecursoComRegras }
+type TurnoEmergencial = 'manha' | 'tarde' | 'noite'
 
 interface ReservaAfetadaManutencao {
   id: number
@@ -21,6 +22,15 @@ interface ReservaAfetadaManutencao {
 }
 
 const STATUS_OPTS: StatusRecurso[] = ['livre', 'ocupado']
+const TURNOS_EMERGENCIAIS: Array<{
+  id: TurnoEmergencial
+  nome: string
+  horario: string
+}> = [
+  { id: 'manha', nome: 'Manhã', horario: '07:00–12:00' },
+  { id: 'tarde', nome: 'Tarde', horario: '12:00–18:00' },
+  { id: 'noite', nome: 'Noite', horario: '18:00–22:00' },
+]
 
 function formatarDataHora(data: string) {
   return new Date(data).toLocaleString('pt-BR', {
@@ -32,18 +42,12 @@ function formatarDataHora(data: string) {
   })
 }
 
-function paraDatetimeLocal(data: Date) {
-  const local = new Date(data.getTime() - data.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
-}
-
-function periodoInicial() {
-  const inicio = new Date()
-  inicio.setMinutes(0, 0, 0)
-  inicio.setHours(inicio.getHours() + 1)
-  const fim = new Date(inicio)
-  fim.setHours(fim.getHours() + 1)
-  return { inicio: paraDatetimeLocal(inicio), fim: paraDatetimeLocal(fim) }
+function dataLocalHoje() {
+  const hoje = new Date()
+  const ano = hoje.getFullYear()
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0')
+  const dia = String(hoje.getDate()).padStart(2, '0')
+  return `${ano}-${mes}-${dia}`
 }
 
 export function AdminRecursos() {
@@ -292,7 +296,7 @@ export function AdminRecursos() {
                           }}
                           className="rounded-md border border-(--color-amber)/40 bg-(--color-amber-soft) px-2.5 py-1 text-xs font-medium text-(--color-amber) hover:bg-(--color-amber-soft)/70"
                         >
-                          interditar período
+                          interdição emergencial
                         </button>
 
                         {aba === 'sala' ? (
@@ -446,8 +450,8 @@ export function AdminRecursos() {
             setAlvoBloqueio(null)
             setSucessoBloqueio(
               reservasCanceladas > 0
-                ? `Interdição criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram notificados.`
-                : 'Interdição criada com sucesso.'
+                ? `Interdição emergencial criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram avisados.`
+                : 'Interdição emergencial criada com sucesso.'
             )
             carregar()
           }}
@@ -466,10 +470,9 @@ function BloqueioManutencaoForm({
   onClose: () => void
   onSaved: (reservasCanceladas: number) => void
 }) {
-  const [periodo] = useState(periodoInicial)
-  const [inicio, setInicio] = useState(periodo.inicio)
-  const [fim, setFim] = useState(periodo.fim)
-  const [motivo, setMotivo] = useState('')
+  const [data, setData] = useState(dataLocalHoje)
+  const [turnos, setTurnos] = useState<TurnoEmergencial[]>([])
+  const [justificativa, setJustificativa] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
   const [reservasAfetadas, setReservasAfetadas] = useState<ReservaAfetadaManutencao[]>([])
@@ -484,29 +487,40 @@ function BloqueioManutencaoForm({
     setErro(null)
   }
 
-  async function enviarInterdicao(confirmarCancelamento: boolean) {
-    const motivoLimpo = motivo.trim()
-    const inicioData = new Date(inicio)
-    const fimData = new Date(fim)
+  function alternarTurno(turno: TurnoEmergencial) {
+    setTurnos((atuais) =>
+      atuais.includes(turno)
+        ? atuais.filter((item) => item !== turno)
+        : [...atuais, turno]
+    )
+    limparConfirmacao()
+  }
 
-    if (!motivoLimpo) {
-      setErro('Informe a justificativa da manutenção.')
+  async function enviarInterdicao(confirmarCancelamento: boolean) {
+    const justificativaLimpa = justificativa.trim()
+
+    if (!data) {
+      setErro('Informe a data da interdição emergencial.')
       return
     }
-    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime()) || fimData <= inicioData) {
-      setErro('O fim da interdição deve ser posterior ao início.')
+    if (turnos.length === 0) {
+      setErro('Selecione ao menos um turno afetado.')
+      return
+    }
+    if (!justificativaLimpa) {
+      setErro('Informe a justificativa pública para os usuários afetados.')
       return
     }
 
     setSalvando(true)
     setErro(null)
 
-    const { data, error } = await supabase.rpc('interditar_recurso_manutencao', {
+    const { data: resultadoRpc, error } = await supabase.rpc('interditar_recurso_emergencial', {
       p_tipo: alvo.tipo,
       p_id_recurso: idRecurso,
-      p_inicio: inicioData.toISOString(),
-      p_fim: fimData.toISOString(),
-      p_motivo: motivoLimpo,
+      p_data: data,
+      p_turnos: turnos,
+      p_justificativa: justificativaLimpa,
       p_confirmar_cancelamento: confirmarCancelamento,
       p_ids_reservas_confirmadas: confirmarCancelamento
         ? reservasAfetadas.map((reserva) => reserva.id)
@@ -518,13 +532,13 @@ function BloqueioManutencaoForm({
       const rpcAusente = error.code === '42883' || error.message.toLowerCase().includes('function')
       setErro(
         rpcAusente
-          ? 'A atualização de cancelamento por manutenção ainda não foi aplicada no Supabase.'
+          ? 'A migração de interdição emergencial ainda não foi aplicada no Supabase.'
           : error.message
       )
       return
     }
 
-    const resultado = data as {
+    const resultado = resultadoRpc as {
       sucesso?: boolean
       requer_confirmacao?: boolean
       lista_alterada?: boolean
@@ -554,65 +568,83 @@ function BloqueioManutencaoForm({
   }
 
   return (
-    <Modal title={`Interditar período: ${nome}`} onClose={() => !salvando && onClose()}>
+    <Modal title={`Interdição emergencial: ${nome}`} onClose={() => !salvando && onClose()}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Status</span>
-          <input value="Em manutenção" className="input" disabled />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Início</span>
-            <input
-              type="datetime-local"
-              value={inicio}
-              onChange={(e) => {
-                setInicio(e.target.value)
-                limparConfirmacao()
-              }}
-              className="input"
-              disabled={reservasAfetadas.length > 0}
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Fim</span>
-            <input
-              type="datetime-local"
-              value={fim}
-              min={inicio}
-              onChange={(e) => {
-                setFim(e.target.value)
-                limparConfirmacao()
-              }}
-              className="input"
-              disabled={reservasAfetadas.length > 0}
-              required
-            />
-          </label>
-        </div>
+        <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-3 text-sm text-(--color-coral)">
+          Esta ação bloqueia os turnos escolhidos, cancela todas as reservas ativas no período e envia um aviso automático a cada usuário afetado.
+        </p>
 
         <label className="block">
-          <span className="mb-1 block text-sm font-medium">Justificativa</span>
-          <textarea
-            value={motivo}
+          <span className="mb-1 block text-sm font-medium">Data</span>
+          <input
+            type="date"
+            value={data}
+            min={dataLocalHoje()}
             onChange={(e) => {
-              setMotivo(e.target.value)
+              setData(e.target.value)
               limparConfirmacao()
             }}
             className="input"
-            rows={3}
-            maxLength={500}
-            placeholder="Ex: Calibração de sensores"
             disabled={reservasAfetadas.length > 0}
             required
           />
         </label>
 
+        <fieldset disabled={reservasAfetadas.length > 0}>
+          <legend className="mb-2 text-sm font-medium">Turnos afetados</legend>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {TURNOS_EMERGENCIAIS.map((turno) => {
+              const selecionado = turnos.includes(turno.id)
+              return (
+                <label
+                  key={turno.id}
+                  className={`cursor-pointer rounded-md border p-3 transition-colors ${
+                    selecionado
+                      ? 'border-(--color-coral) bg-(--color-coral-soft) text-(--color-coral)'
+                      : 'border-(--color-border) bg-white hover:bg-black/[0.02]'
+                  }`}
+                >
+                  <span className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selecionado}
+                      onChange={() => alternarTurno(turno.id)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium">{turno.nome}</span>
+                      <span className="font-mono text-xs opacity-75">{turno.horario}</span>
+                    </span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Justificativa pública</span>
+          <textarea
+            value={justificativa}
+            onChange={(e) => {
+              setJustificativa(e.target.value)
+              limparConfirmacao()
+            }}
+            className="input"
+            rows={3}
+            maxLength={500}
+            placeholder="Ex: Falta de energia programada no campus"
+            disabled={reservasAfetadas.length > 0}
+            required
+          />
+          <span className="mt-1 block text-xs text-(--color-ink-soft)">
+            Esta mensagem aparecerá no calendário e nos avisos enviados aos usuários.
+          </span>
+        </label>
+
         {reservasAfetadas.length === 0 ? (
           <p className="rounded-md border border-(--color-amber)/30 bg-(--color-amber-soft) p-3 text-xs text-(--color-amber)">
-            A faixa será destacada no calendário e nenhuma nova reserva poderá ser solicitada durante o período.
+            Nenhuma alteração será gravada antes da revisão das reservas afetadas.
           </p>
         ) : (
           <div className="rounded-lg border border-(--color-coral)/40 bg-(--color-coral-soft) p-4">
@@ -620,7 +652,7 @@ function BloqueioManutencaoForm({
               {reservasAfetadas.length} reserva(s) serão cancelada(s)
             </h3>
             <p className="mt-1 text-sm text-(--color-ink-soft)">
-              Revise os usuários afetados. Ao confirmar, a interdição e os cancelamentos serão gravados juntos, e cada usuário receberá a justificativa.
+              Revise os usuários afetados. Ao confirmar, as reservas passarão para “Cancelada pela Administração” e todos receberão a justificativa pública.
             </p>
 
             <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
@@ -664,7 +696,7 @@ function BloqueioManutencaoForm({
                 disabled={salvando}
                 className="inline-flex items-center justify-center rounded-md bg-(--color-coral) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {salvando ? 'cancelando reservas…' : 'confirmar cancelamentos e interditar'}
+                {salvando ? 'cancelando reservas…' : 'confirmar interdição e avisar'}
               </button>
             </>
           ) : (
@@ -672,7 +704,11 @@ function BloqueioManutencaoForm({
               <button type="button" className="btn-secondary" onClick={onClose} disabled={salvando}>
                 cancelar
               </button>
-              <button type="submit" className="btn-primary" disabled={salvando || !motivo.trim()}>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={salvando || turnos.length === 0 || !justificativa.trim()}
+              >
                 {salvando ? 'verificando reservas…' : 'continuar'}
               </button>
             </>
@@ -810,7 +846,7 @@ function RecursoForm({
             ))}
           </select>
           <span className="mt-1 block text-xs text-(--color-ink-soft)">
-            Para manutenção com início, fim e justificativa, use “interditar período” na lista de recursos.
+            Para cancelar reservas por data e turnos com aviso aos usuários, use “interdição emergencial” na lista de recursos.
           </span>
         </label>
 

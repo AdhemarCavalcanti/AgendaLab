@@ -45,6 +45,8 @@ describe('MinhasReservas Page', () => {
       fim: '2026-10-17T10:00:00.000Z',
       status: 'cancelada',
       observacao: 'Experimento de Óptica',
+      cancelada_por_administracao: true,
+      justificativa_cancelamento: 'Falta de energia no campus',
     },
   ]
 
@@ -121,6 +123,8 @@ describe('MinhasReservas Page', () => {
     expect(screen.getByText('Anfiteatro B')).toBeInTheDocument()
     expect(screen.getByText('Projetor HD')).toBeInTheDocument()
     expect(screen.getByText(/Estudo de Física Teórica/i)).toBeInTheDocument()
+    expect(screen.getByText('Cancelada pela Administração')).toBeInTheDocument()
+    expect(screen.getByText(/Falta de energia no campus/i)).toBeInTheDocument()
   })
 
   it('filtra reservas por status (apenas aprovadas)', async () => {

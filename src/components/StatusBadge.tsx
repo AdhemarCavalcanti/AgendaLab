@@ -11,6 +11,7 @@ const RESERVA_MAP: Record<string, { label: string; cls: string }> = {
   confirmada: { label: 'Confirmada', cls: 'bg-(--color-green-soft) text-(--color-green) border-(--color-green)/30' },
   rejeitada: { label: 'Rejeitada', cls: 'bg-(--color-coral-soft) text-(--color-coral) border-(--color-coral)/30' },
   cancelada: { label: 'Cancelada', cls: 'bg-black/5 text-(--color-ink-soft) border-black/10' },
+  cancelada_administracao: { label: 'Cancelada pela Administração', cls: 'bg-(--color-coral-soft) text-(--color-coral) border-(--color-coral)/30' },
 }
 
 export function StatusBadge({ status, tipo = 'reserva' }: { status: string; tipo?: 'reserva' | 'recurso' }) {
