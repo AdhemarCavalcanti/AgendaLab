@@ -66,6 +66,9 @@ export function AdminRecursos() {
   const [enviandoManutencao, setEnviandoManutencao] = useState(false)
   const [alvoBloqueio, setAlvoBloqueio] = useState<AlvoBloqueio | null>(null)
   const [sucessoBloqueio, setSucessoBloqueio] = useState<string | null>(null)
+  // Trava de monetização: verifica o plano e conta as salas
+  const isPremium = localStorage.getItem('agendalab_plano') === 'premium';
+  const limiteSalasAtingido = !isPremium && aba === 'sala' && salas.length >= 2;
 
   async function carregar() {
     setLoading(true)
@@ -180,20 +183,31 @@ export function AdminRecursos() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+      
+      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
           <h1 className="font-display text-3xl font-bold">Gestão de recursos</h1>
         </div>
-        <button
-          className="btn-primary"
-          onClick={() => {
-            setEditando(null)
-            setModalAberto(true)
-          }}
-        >
-          + novo {aba}
-        </button>
+        
+        <div className="flex flex-col items-end sm:items-start gap-1">
+          <button
+            className="btn-primary"
+            onClick={() => {
+              setEditando(null)
+              setModalAberto(true)
+            }}
+            disabled={limiteSalasAtingido}
+          >
+            + novo {aba}
+          </button>
+          
+          {limiteSalasAtingido && (
+            <span className="text-[10px] text-(--color-coral) font-medium max-w-[200px] text-right sm:text-left leading-tight animate-fade-in">
+              Limite de 2 salas atingido. <a href="/admin/planos" className="underline font-bold hover:text-(--color-coral)/80">Faça upgrade para Premium</a>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="mb-6 flex gap-2">

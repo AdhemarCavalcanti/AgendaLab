@@ -48,6 +48,9 @@ export function Navbar() {
                 <NavLink to="/admin/dashboard" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
                   dashboard
                 </NavLink>
+                <NavLink to="/admin/planos" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
+                  planos
+                </NavLink>
               </>
             )}
           </nav>
