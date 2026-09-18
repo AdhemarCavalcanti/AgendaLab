@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AdminRecursos } from '../Recursos'
@@ -92,6 +92,39 @@ describe('AdminRecursos Page', () => {
 
     expect(await screen.findByText('Projetor 4K')).toBeInTheDocument()
     expect(screen.queryByText('Sala A')).not.toBeInTheDocument()
+  })
+
+  it('interdita um período de manutenção com justificativa', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AdminRecursos />
+      </MemoryRouter>
+    )
+
+    await screen.findByText('Sala A')
+    await user.click(screen.getAllByRole('button', { name: /interditar período/i })[0])
+
+    const inicio = '2026-11-10T08:00'
+    const fim = '2026-11-10T12:00'
+    fireEvent.change(screen.getByLabelText('Início'), { target: { value: inicio } })
+    fireEvent.change(screen.getByLabelText('Fim'), { target: { value: fim } })
+    await user.type(screen.getByRole('textbox', { name: /^justificativa$/i }), 'Calibração de sensores')
+    await user.click(screen.getByRole('button', { name: /continuar/i }))
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('interditar_recurso_manutencao', {
+        p_tipo: 'sala',
+        p_id_recurso: 1,
+        p_inicio: new Date(inicio).toISOString(),
+        p_fim: new Date(fim).toISOString(),
+        p_motivo: 'Calibração de sensores',
+        p_confirmar_cancelamento: false,
+        p_ids_reservas_confirmadas: null,
+      })
+    })
+    expect(await screen.findByText('Interdição criada com sucesso.')).toBeInTheDocument()
   })
 
   it('interdita turnos, confirma as reservas afetadas e envia a justificativa pública', async () => {

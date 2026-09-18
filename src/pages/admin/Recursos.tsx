@@ -42,6 +42,20 @@ function formatarDataHora(data: string) {
   })
 }
 
+function paraDatetimeLocal(data: Date) {
+  const local = new Date(data.getTime() - data.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
+function periodoInicial() {
+  const inicio = new Date()
+  inicio.setMinutes(0, 0, 0)
+  inicio.setHours(inicio.getHours() + 1)
+  const fim = new Date(inicio)
+  fim.setHours(fim.getHours() + 1)
+  return { inicio: paraDatetimeLocal(inicio), fim: paraDatetimeLocal(fim) }
+}
+
 function dataLocalHoje() {
   const hoje = new Date()
   const ano = hoje.getFullYear()
@@ -69,6 +83,7 @@ export function AdminRecursos() {
   const [qtdManutencaoInput, setQtdManutencaoInput] = useState<number>(1)
   const [enviandoManutencao, setEnviandoManutencao] = useState(false)
   const [alvoBloqueio, setAlvoBloqueio] = useState<AlvoBloqueio | null>(null)
+  const [alvoEmergencia, setAlvoEmergencia] = useState<AlvoBloqueio | null>(null)
   const [sucessoBloqueio, setSucessoBloqueio] = useState<string | null>(null)
   // Trava de monetização: verifica o plano e conta as salas
   const isPremium = localStorage.getItem('agendalab_plano') === 'premium';
@@ -278,7 +293,7 @@ export function AdminRecursos() {
                       <StatusBadge status={item.status} tipo="recurso" />
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
                         <button
                           onClick={() => {
                             setEditando(item)
@@ -295,6 +310,16 @@ export function AdminRecursos() {
                             setAlvoBloqueio({ tipo: aba, item })
                           }}
                           className="rounded-md border border-(--color-amber)/40 bg-(--color-amber-soft) px-2.5 py-1 text-xs font-medium text-(--color-amber) hover:bg-(--color-amber-soft)/70"
+                        >
+                          interditar período
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            setSucessoBloqueio(null)
+                            setAlvoEmergencia({ tipo: aba, item })
+                          }}
+                          className="rounded-md border border-(--color-coral)/40 bg-(--color-coral-soft) px-2.5 py-1 text-xs font-medium text-(--color-coral) hover:bg-(--color-coral-soft)/70"
                         >
                           interdição emergencial
                         </button>
@@ -450,6 +475,22 @@ export function AdminRecursos() {
             setAlvoBloqueio(null)
             setSucessoBloqueio(
               reservasCanceladas > 0
+                ? `Interdição criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram notificados.`
+                : 'Interdição criada com sucesso.'
+            )
+            carregar()
+          }}
+        />
+      )}
+
+      {alvoEmergencia && (
+        <InterdicaoEmergencialForm
+          alvo={alvoEmergencia}
+          onClose={() => setAlvoEmergencia(null)}
+          onSaved={(reservasCanceladas) => {
+            setAlvoEmergencia(null)
+            setSucessoBloqueio(
+              reservasCanceladas > 0
                 ? `Interdição emergencial criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram avisados.`
                 : 'Interdição emergencial criada com sucesso.'
             )
@@ -462,6 +503,232 @@ export function AdminRecursos() {
 }
 
 function BloqueioManutencaoForm({
+  alvo,
+  onClose,
+  onSaved,
+}: {
+  alvo: AlvoBloqueio
+  onClose: () => void
+  onSaved: (reservasCanceladas: number) => void
+}) {
+  const [periodo] = useState(periodoInicial)
+  const [inicio, setInicio] = useState(periodo.inicio)
+  const [fim, setFim] = useState(periodo.fim)
+  const [motivo, setMotivo] = useState('')
+  const [salvando, setSalvando] = useState(false)
+  const [erro, setErro] = useState<string | null>(null)
+  const [reservasAfetadas, setReservasAfetadas] = useState<ReservaAfetadaManutencao[]>([])
+
+  const nome = alvo.item.nome
+  const idRecurso = alvo.tipo === 'sala'
+    ? (alvo.item as SalaComRegras).id_sala
+    : (alvo.item as EquipamentoComRegras).id
+
+  function limparConfirmacao() {
+    setReservasAfetadas([])
+    setErro(null)
+  }
+
+  async function enviarInterdicao(confirmarCancelamento: boolean) {
+    const motivoLimpo = motivo.trim()
+    const inicioData = new Date(inicio)
+    const fimData = new Date(fim)
+
+    if (!motivoLimpo) {
+      setErro('Informe a justificativa da manutenção.')
+      return
+    }
+    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime()) || fimData <= inicioData) {
+      setErro('O fim da interdição deve ser posterior ao início.')
+      return
+    }
+
+    setSalvando(true)
+    setErro(null)
+
+    const { data, error } = await supabase.rpc('interditar_recurso_manutencao', {
+      p_tipo: alvo.tipo,
+      p_id_recurso: idRecurso,
+      p_inicio: inicioData.toISOString(),
+      p_fim: fimData.toISOString(),
+      p_motivo: motivoLimpo,
+      p_confirmar_cancelamento: confirmarCancelamento,
+      p_ids_reservas_confirmadas: confirmarCancelamento
+        ? reservasAfetadas.map((reserva) => reserva.id)
+        : null,
+    })
+    setSalvando(false)
+
+    if (error) {
+      const rpcAusente = error.code === '42883' || error.message.toLowerCase().includes('function')
+      setErro(
+        rpcAusente
+          ? 'A atualização de cancelamento por manutenção ainda não foi aplicada no Supabase.'
+          : error.message
+      )
+      return
+    }
+
+    const resultado = data as {
+      sucesso?: boolean
+      requer_confirmacao?: boolean
+      lista_alterada?: boolean
+      reservas_afetadas?: ReservaAfetadaManutencao[]
+      reservas_canceladas?: number
+    } | null
+
+    if (resultado?.requer_confirmacao) {
+      setReservasAfetadas(resultado.reservas_afetadas ?? [])
+      if (resultado.lista_alterada) {
+        setErro('As reservas afetadas mudaram enquanto você confirmava. Revise a lista atualizada e confirme novamente.')
+      }
+      return
+    }
+
+    if (!resultado?.sucesso) {
+      setErro('Não foi possível criar a interdição.')
+      return
+    }
+
+    onSaved(resultado.reservas_canceladas ?? 0)
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    await enviarInterdicao(false)
+  }
+
+  return (
+    <Modal title={`Interditar período: ${nome}`} onClose={() => !salvando && onClose()}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Status</span>
+          <input value="Em manutenção" className="input" disabled />
+        </label>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium">Início</span>
+            <input
+              type="datetime-local"
+              value={inicio}
+              onChange={(e) => {
+                setInicio(e.target.value)
+                limparConfirmacao()
+              }}
+              className="input"
+              disabled={reservasAfetadas.length > 0}
+              required
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium">Fim</span>
+            <input
+              type="datetime-local"
+              value={fim}
+              min={inicio}
+              onChange={(e) => {
+                setFim(e.target.value)
+                limparConfirmacao()
+              }}
+              className="input"
+              disabled={reservasAfetadas.length > 0}
+              required
+            />
+          </label>
+        </div>
+
+        <label className="block">
+          <span className="mb-1 block text-sm font-medium">Justificativa</span>
+          <textarea
+            value={motivo}
+            onChange={(e) => {
+              setMotivo(e.target.value)
+              limparConfirmacao()
+            }}
+            className="input"
+            rows={3}
+            maxLength={500}
+            placeholder="Ex: Calibração de sensores"
+            disabled={reservasAfetadas.length > 0}
+            required
+          />
+        </label>
+
+        {reservasAfetadas.length === 0 ? (
+          <p className="rounded-md border border-(--color-amber)/30 bg-(--color-amber-soft) p-3 text-xs text-(--color-amber)">
+            A faixa será destacada no calendário e nenhuma nova reserva poderá ser solicitada durante o período.
+          </p>
+        ) : (
+          <div className="rounded-lg border border-(--color-coral)/40 bg-(--color-coral-soft) p-4">
+            <h3 className="font-display font-semibold text-(--color-coral)">
+              {reservasAfetadas.length} reserva(s) serão cancelada(s)
+            </h3>
+            <p className="mt-1 text-sm text-(--color-ink-soft)">
+              Revise os usuários afetados. Ao confirmar, a interdição e os cancelamentos serão gravados juntos, e cada usuário receberá a justificativa.
+            </p>
+
+            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
+              {reservasAfetadas.map((reserva) => (
+                <div key={reserva.id} className="rounded-md border border-(--color-coral)/20 bg-white p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium">{reserva.usuario_nome}</p>
+                    <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2 py-0.5 font-mono text-[11px] text-(--color-amber)">
+                      {reserva.status === 'aprovada' ? 'aprovada' : 'pendente'}
+                    </span>
+                  </div>
+                  <p className="mt-1 font-mono text-xs text-(--color-ink-soft)">
+                    {formatarDataHora(reserva.inicio)} → {formatarDataHora(reserva.fim)}
+                  </p>
+                  <p className="mt-1 text-xs text-(--color-ink-soft)">
+                    {reserva.usuario_matricula && `Matrícula: ${reserva.usuario_matricula} · `}
+                    {reserva.usuario_email}
+                    {reserva.quantidade !== null && ` · Quantidade: ${reserva.quantidade}`}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {erro && (
+          <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
+            {erro}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          {reservasAfetadas.length > 0 ? (
+            <>
+              <button type="button" className="btn-secondary" onClick={limparConfirmacao} disabled={salvando}>
+                voltar e editar
+              </button>
+              <button
+                type="button"
+                onClick={() => enviarInterdicao(true)}
+                disabled={salvando}
+                className="inline-flex items-center justify-center rounded-md bg-(--color-coral) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {salvando ? 'cancelando reservas…' : 'confirmar cancelamentos e interditar'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" className="btn-secondary" onClick={onClose} disabled={salvando}>
+                cancelar
+              </button>
+              <button type="submit" className="btn-primary" disabled={salvando || !motivo.trim()}>
+                {salvando ? 'verificando reservas…' : 'continuar'}
+              </button>
+            </>
+          )}
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function InterdicaoEmergencialForm({
   alvo,
   onClose,
   onSaved,
@@ -846,7 +1113,7 @@ function RecursoForm({
             ))}
           </select>
           <span className="mt-1 block text-xs text-(--color-ink-soft)">
-            Para cancelar reservas por data e turnos com aviso aos usuários, use “interdição emergencial” na lista de recursos.
+            Use “interditar período” para uma manutenção programada ou “interdição emergencial” para cancelar reservas por data e turnos.
           </span>
         </label>
 
