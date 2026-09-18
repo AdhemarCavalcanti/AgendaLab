@@ -32,6 +32,7 @@ describe('AdminRecursos Page', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.setItem('agendalab_plano', 'premium')
     vi.mocked(supabase.rpc).mockResolvedValue({
       data: { sucesso: true, reservas_canceladas: 0 },
       error: null,
