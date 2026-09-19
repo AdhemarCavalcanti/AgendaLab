@@ -7,10 +7,11 @@ import { Modal } from '../../components/Modal'
 type SalaComRegras = Sala & { regras_uso?: string }
 type EquipamentoComRegras = Equipamento & { regras_uso?: string; quantidade_manutencao?: number }
 type RecursoComRegras = SalaComRegras | EquipamentoComRegras
-type AlvoBloqueio = { tipo: TipoRecurso; item: RecursoComRegras }
-type TurnoEmergencial = 'manha' | 'tarde' | 'noite'
+type AlvoIndisponibilidade = { tipo: TipoRecurso; item: RecursoComRegras }
+type TurnoIndisponibilidade = 'manha' | 'tarde' | 'noite'
+type FormaIndisponibilidade = 'intervalo' | 'turnos'
 
-interface ReservaAfetadaManutencao {
+interface ReservaAfetada {
   id: number
   status: 'pendente' | 'aprovada'
   inicio: string
@@ -22,8 +23,8 @@ interface ReservaAfetadaManutencao {
 }
 
 const STATUS_OPTS: StatusRecurso[] = ['livre', 'ocupado']
-const TURNOS_EMERGENCIAIS: Array<{
-  id: TurnoEmergencial
+const TURNOS_INDISPONIBILIDADE: Array<{
+  id: TurnoIndisponibilidade
   nome: string
   horario: string
 }> = [
@@ -82,9 +83,8 @@ export function AdminRecursos() {
   } | null>(null)
   const [qtdManutencaoInput, setQtdManutencaoInput] = useState<number>(1)
   const [enviandoManutencao, setEnviandoManutencao] = useState(false)
-  const [alvoBloqueio, setAlvoBloqueio] = useState<AlvoBloqueio | null>(null)
-  const [alvoEmergencia, setAlvoEmergencia] = useState<AlvoBloqueio | null>(null)
-  const [sucessoBloqueio, setSucessoBloqueio] = useState<string | null>(null)
+  const [alvoIndisponibilidade, setAlvoIndisponibilidade] = useState<AlvoIndisponibilidade | null>(null)
+  const [sucessoIndisponibilidade, setSucessoIndisponibilidade] = useState<string | null>(null)
   async function carregar() {
     setLoading(true)
     setErro(null)
@@ -231,9 +231,9 @@ export function AdminRecursos() {
       </div>
 
       {erro && <p className="alert-error mb-4">{erro}</p>}
-      {sucessoBloqueio && (
+      {sucessoIndisponibilidade && (
         <p className="alert-ok mb-4">
-          {sucessoBloqueio}
+          {sucessoIndisponibilidade}
         </p>
       )}
 
@@ -293,22 +293,12 @@ export function AdminRecursos() {
 
                         <button
                           onClick={() => {
-                            setSucessoBloqueio(null)
-                            setAlvoBloqueio({ tipo: aba, item })
+                            setSucessoIndisponibilidade(null)
+                            setAlvoIndisponibilidade({ tipo: aba, item })
                           }}
                           className="rounded-md border border-(--color-amber)/40 bg-(--color-amber-soft) px-2.5 py-1 text-xs font-medium text-(--color-amber) hover:bg-(--color-amber-soft)/70"
                         >
-                          interditar período
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setSucessoBloqueio(null)
-                            setAlvoEmergencia({ tipo: aba, item })
-                          }}
-                          className="rounded-md border border-(--color-coral)/40 bg-(--color-coral-soft) px-2.5 py-1 text-xs font-medium text-(--color-coral) hover:bg-(--color-coral-soft)/70"
-                        >
-                          interdição emergencial
+                          indisponibilizar
                         </button>
 
                         {aba === 'sala' ? (
@@ -454,32 +444,16 @@ export function AdminRecursos() {
         </Modal>
       )}
 
-      {alvoBloqueio && (
-        <BloqueioManutencaoForm
-          alvo={alvoBloqueio}
-          onClose={() => setAlvoBloqueio(null)}
+      {alvoIndisponibilidade && (
+        <IndisponibilidadeForm
+          alvo={alvoIndisponibilidade}
+          onClose={() => setAlvoIndisponibilidade(null)}
           onSaved={(reservasCanceladas) => {
-            setAlvoBloqueio(null)
-            setSucessoBloqueio(
+            setAlvoIndisponibilidade(null)
+            setSucessoIndisponibilidade(
               reservasCanceladas > 0
-                ? `Interdição criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram notificados.`
-                : 'Interdição criada com sucesso.'
-            )
-            carregar()
-          }}
-        />
-      )}
-
-      {alvoEmergencia && (
-        <InterdicaoEmergencialForm
-          alvo={alvoEmergencia}
-          onClose={() => setAlvoEmergencia(null)}
-          onSaved={(reservasCanceladas) => {
-            setAlvoEmergencia(null)
-            setSucessoBloqueio(
-              reservasCanceladas > 0
-                ? `Interdição emergencial criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram avisados.`
-                : 'Interdição emergencial criada com sucesso.'
+                ? `Indisponibilidade criada e ${reservasCanceladas} reserva(s) cancelada(s). Os usuários foram notificados.`
+                : 'Indisponibilidade criada com sucesso.'
             )
             carregar()
           }}
@@ -489,247 +463,25 @@ export function AdminRecursos() {
   )
 }
 
-function BloqueioManutencaoForm({
+function IndisponibilidadeForm({
   alvo,
   onClose,
   onSaved,
 }: {
-  alvo: AlvoBloqueio
+  alvo: AlvoIndisponibilidade
   onClose: () => void
   onSaved: (reservasCanceladas: number) => void
 }) {
+  const [forma, setForma] = useState<FormaIndisponibilidade>('intervalo')
   const [periodo] = useState(periodoInicial)
   const [inicio, setInicio] = useState(periodo.inicio)
   const [fim, setFim] = useState(periodo.fim)
-  const [motivo, setMotivo] = useState('')
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
-  const [reservasAfetadas, setReservasAfetadas] = useState<ReservaAfetadaManutencao[]>([])
-
-  const nome = alvo.item.nome
-  const idRecurso = alvo.tipo === 'sala'
-    ? (alvo.item as SalaComRegras).id_sala
-    : (alvo.item as EquipamentoComRegras).id
-
-  function limparConfirmacao() {
-    setReservasAfetadas([])
-    setErro(null)
-  }
-
-  async function enviarInterdicao(confirmarCancelamento: boolean) {
-    const motivoLimpo = motivo.trim()
-    const inicioData = new Date(inicio)
-    const fimData = new Date(fim)
-
-    if (!motivoLimpo) {
-      setErro('Informe a justificativa da manutenção.')
-      return
-    }
-    if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime()) || fimData <= inicioData) {
-      setErro('O fim da interdição deve ser posterior ao início.')
-      return
-    }
-
-    setSalvando(true)
-    setErro(null)
-
-    const { data, error } = await supabase.rpc('interditar_recurso_manutencao', {
-      p_tipo: alvo.tipo,
-      p_id_recurso: idRecurso,
-      p_inicio: inicioData.toISOString(),
-      p_fim: fimData.toISOString(),
-      p_motivo: motivoLimpo,
-      p_confirmar_cancelamento: confirmarCancelamento,
-      p_ids_reservas_confirmadas: confirmarCancelamento
-        ? reservasAfetadas.map((reserva) => reserva.id)
-        : null,
-    })
-    setSalvando(false)
-
-    if (error) {
-      const rpcAusente = error.code === '42883' || error.message.toLowerCase().includes('function')
-      setErro(
-        rpcAusente
-          ? 'A atualização de cancelamento por manutenção ainda não foi aplicada no Supabase.'
-          : error.message
-      )
-      return
-    }
-
-    const resultado = data as {
-      sucesso?: boolean
-      requer_confirmacao?: boolean
-      lista_alterada?: boolean
-      reservas_afetadas?: ReservaAfetadaManutencao[]
-      reservas_canceladas?: number
-    } | null
-
-    if (resultado?.requer_confirmacao) {
-      setReservasAfetadas(resultado.reservas_afetadas ?? [])
-      if (resultado.lista_alterada) {
-        setErro('As reservas afetadas mudaram enquanto você confirmava. Revise a lista atualizada e confirme novamente.')
-      }
-      return
-    }
-
-    if (!resultado?.sucesso) {
-      setErro('Não foi possível criar a interdição.')
-      return
-    }
-
-    onSaved(resultado.reservas_canceladas ?? 0)
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    await enviarInterdicao(false)
-  }
-
-  return (
-    <Modal title={`Interditar período: ${nome}`} onClose={() => !salvando && onClose()}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Status</span>
-          <input value="Em manutenção" className="input" disabled />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Início</span>
-            <input
-              type="datetime-local"
-              value={inicio}
-              onChange={(e) => {
-                setInicio(e.target.value)
-                limparConfirmacao()
-              }}
-              className="input"
-              disabled={reservasAfetadas.length > 0}
-              required
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium">Fim</span>
-            <input
-              type="datetime-local"
-              value={fim}
-              min={inicio}
-              onChange={(e) => {
-                setFim(e.target.value)
-                limparConfirmacao()
-              }}
-              className="input"
-              disabled={reservasAfetadas.length > 0}
-              required
-            />
-          </label>
-        </div>
-
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Justificativa</span>
-          <textarea
-            value={motivo}
-            onChange={(e) => {
-              setMotivo(e.target.value)
-              limparConfirmacao()
-            }}
-            className="input"
-            rows={3}
-            maxLength={500}
-            placeholder="Ex: Calibração de sensores"
-            disabled={reservasAfetadas.length > 0}
-            required
-          />
-        </label>
-
-        {reservasAfetadas.length === 0 ? (
-          <p className="rounded-md border border-(--color-amber)/30 bg-(--color-amber-soft) p-3 text-xs text-(--color-amber)">
-            A faixa será destacada no calendário e nenhuma nova reserva poderá ser solicitada durante o período.
-          </p>
-        ) : (
-          <div className="rounded-lg border border-(--color-coral)/40 bg-(--color-coral-soft) p-4">
-            <h3 className="font-display font-semibold text-(--color-coral)">
-              {reservasAfetadas.length} reserva(s) serão cancelada(s)
-            </h3>
-            <p className="mt-1 text-sm text-(--color-ink-soft)">
-              Revise os usuários afetados. Ao confirmar, a interdição e os cancelamentos serão gravados juntos, e cada usuário receberá a justificativa.
-            </p>
-
-            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
-              {reservasAfetadas.map((reserva) => (
-                <div key={reserva.id} className="rounded-md border border-(--color-coral)/20 bg-white p-3 text-sm">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">{reserva.usuario_nome}</p>
-                    <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2 py-0.5 font-mono text-[11px] text-(--color-amber)">
-                      {reserva.status === 'aprovada' ? 'aprovada' : 'pendente'}
-                    </span>
-                  </div>
-                  <p className="mt-1 font-mono text-xs text-(--color-ink-soft)">
-                    {formatarDataHora(reserva.inicio)} → {formatarDataHora(reserva.fim)}
-                  </p>
-                  <p className="mt-1 text-xs text-(--color-ink-soft)">
-                    {reserva.usuario_matricula && `Matrícula: ${reserva.usuario_matricula} · `}
-                    {reserva.usuario_email}
-                    {reserva.quantidade !== null && ` · Quantidade: ${reserva.quantidade}`}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {erro && (
-          <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
-            {erro}
-          </p>
-        )}
-
-        <div className="flex justify-end gap-2">
-          {reservasAfetadas.length > 0 ? (
-            <>
-              <button type="button" className="btn-secondary" onClick={limparConfirmacao} disabled={salvando}>
-                voltar e editar
-              </button>
-              <button
-                type="button"
-                onClick={() => enviarInterdicao(true)}
-                disabled={salvando}
-                className="inline-flex items-center justify-center rounded-md bg-(--color-coral) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {salvando ? 'cancelando reservas…' : 'confirmar cancelamentos e interditar'}
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" className="btn-secondary" onClick={onClose} disabled={salvando}>
-                cancelar
-              </button>
-              <button type="submit" className="btn-primary" disabled={salvando || !motivo.trim()}>
-                {salvando ? 'verificando reservas…' : 'continuar'}
-              </button>
-            </>
-          )}
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-function InterdicaoEmergencialForm({
-  alvo,
-  onClose,
-  onSaved,
-}: {
-  alvo: AlvoBloqueio
-  onClose: () => void
-  onSaved: (reservasCanceladas: number) => void
-}) {
   const [data, setData] = useState(dataLocalHoje)
-  const [turnos, setTurnos] = useState<TurnoEmergencial[]>([])
+  const [turnos, setTurnos] = useState<TurnoIndisponibilidade[]>([])
   const [justificativa, setJustificativa] = useState('')
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [reservasAfetadas, setReservasAfetadas] = useState<ReservaAfetadaManutencao[]>([])
+  const [reservasAfetadas, setReservasAfetadas] = useState<ReservaAfetada[]>([])
 
   const nome = alvo.item.nome
   const idRecurso = alvo.tipo === 'sala'
@@ -741,7 +493,12 @@ function InterdicaoEmergencialForm({
     setErro(null)
   }
 
-  function alternarTurno(turno: TurnoEmergencial) {
+  function alterarForma(novaForma: FormaIndisponibilidade) {
+    setForma(novaForma)
+    limparConfirmacao()
+  }
+
+  function alternarTurno(turno: TurnoIndisponibilidade) {
     setTurnos((atuais) =>
       atuais.includes(turno)
         ? atuais.filter((item) => item !== turno)
@@ -750,43 +507,65 @@ function InterdicaoEmergencialForm({
     limparConfirmacao()
   }
 
-  async function enviarInterdicao(confirmarCancelamento: boolean) {
+  async function enviarIndisponibilidade(confirmarCancelamento: boolean) {
     const justificativaLimpa = justificativa.trim()
 
-    if (!data) {
-      setErro('Informe a data da interdição emergencial.')
-      return
-    }
-    if (turnos.length === 0) {
-      setErro('Selecione ao menos um turno afetado.')
-      return
-    }
     if (!justificativaLimpa) {
-      setErro('Informe a justificativa pública para os usuários afetados.')
+      setErro('Informe uma justificativa pública para a indisponibilidade.')
       return
+    }
+
+    const inicioData = new Date(inicio)
+    const fimData = new Date(fim)
+
+    if (forma === 'intervalo') {
+      if (Number.isNaN(inicioData.getTime()) || Number.isNaN(fimData.getTime()) || fimData <= inicioData) {
+        setErro('O fim da indisponibilidade deve ser posterior ao início.')
+        return
+      }
+    } else {
+      if (!data) {
+        setErro('Informe a data da indisponibilidade.')
+        return
+      }
+      if (turnos.length === 0) {
+        setErro('Selecione ao menos um turno afetado.')
+        return
+      }
     }
 
     setSalvando(true)
     setErro(null)
 
-    const { data: resultadoRpc, error } = await supabase.rpc('interditar_recurso_emergencial', {
-      p_tipo: alvo.tipo,
-      p_id_recurso: idRecurso,
-      p_data: data,
-      p_turnos: turnos,
-      p_justificativa: justificativaLimpa,
-      p_confirmar_cancelamento: confirmarCancelamento,
-      p_ids_reservas_confirmadas: confirmarCancelamento
-        ? reservasAfetadas.map((reserva) => reserva.id)
-        : null,
-    })
+    const idsReservasConfirmadas = confirmarCancelamento
+      ? reservasAfetadas.map((reserva) => reserva.id)
+      : null
+    const { data: resultadoRpc, error } = forma === 'intervalo'
+      ? await supabase.rpc('interditar_recurso_manutencao', {
+          p_tipo: alvo.tipo,
+          p_id_recurso: idRecurso,
+          p_inicio: inicioData.toISOString(),
+          p_fim: fimData.toISOString(),
+          p_motivo: justificativaLimpa,
+          p_confirmar_cancelamento: confirmarCancelamento,
+          p_ids_reservas_confirmadas: idsReservasConfirmadas,
+        })
+      : await supabase.rpc('interditar_recurso_emergencial', {
+          p_tipo: alvo.tipo,
+          p_id_recurso: idRecurso,
+          p_data: data,
+          p_turnos: turnos,
+          p_justificativa: justificativaLimpa,
+          p_confirmar_cancelamento: confirmarCancelamento,
+          p_ids_reservas_confirmadas: idsReservasConfirmadas,
+        })
     setSalvando(false)
 
     if (error) {
       const rpcAusente = error.code === '42883' || error.message.toLowerCase().includes('function')
       setErro(
         rpcAusente
-          ? 'A migração de interdição emergencial ainda não foi aplicada no Supabase.'
+          ? 'A funcionalidade de indisponibilidade ainda não foi aplicada no Supabase.'
           : error.message
       )
       return
@@ -796,7 +575,7 @@ function InterdicaoEmergencialForm({
       sucesso?: boolean
       requer_confirmacao?: boolean
       lista_alterada?: boolean
-      reservas_afetadas?: ReservaAfetadaManutencao[]
+      reservas_afetadas?: ReservaAfetada[]
       reservas_canceladas?: number
     } | null
 
@@ -809,7 +588,7 @@ function InterdicaoEmergencialForm({
     }
 
     if (!resultado?.sucesso) {
-      setErro('Não foi possível criar a interdição.')
+      setErro('Não foi possível criar a indisponibilidade.')
       return
     }
 
@@ -818,63 +597,139 @@ function InterdicaoEmergencialForm({
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    await enviarInterdicao(false)
+    await enviarIndisponibilidade(false)
   }
 
   return (
-    <Modal title={`Interdição emergencial: ${nome}`} onClose={() => !salvando && onClose()}>
+    <Modal title={`Indisponibilizar recurso: ${nome}`} onClose={() => !salvando && onClose()}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-3 text-sm text-(--color-coral)">
-          Esta ação bloqueia os turnos escolhidos, cancela todas as reservas ativas no período e envia um aviso automático a cada usuário afetado.
-        </p>
-
-        <label className="block">
-          <span className="mb-1 block text-sm font-medium">Data</span>
-          <input
-            type="date"
-            value={data}
-            min={dataLocalHoje()}
-            onChange={(e) => {
-              setData(e.target.value)
-              limparConfirmacao()
-            }}
-            className="input"
-            disabled={reservasAfetadas.length > 0}
-            required
-          />
-        </label>
-
         <fieldset disabled={reservasAfetadas.length > 0}>
-          <legend className="mb-2 text-sm font-medium">Turnos afetados</legend>
-          <div className="grid gap-2 sm:grid-cols-3">
-            {TURNOS_EMERGENCIAIS.map((turno) => {
-              const selecionado = turnos.includes(turno.id)
-              return (
-                <label
-                  key={turno.id}
-                  className={`cursor-pointer rounded-md border p-3 transition-colors ${
-                    selecionado
-                      ? 'border-(--color-coral) bg-(--color-coral-soft) text-(--color-coral)'
-                      : 'border-(--color-border) bg-white hover:bg-black/[0.02]'
-                  }`}
-                >
-                  <span className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selecionado}
-                      onChange={() => alternarTurno(turno.id)}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">{turno.nome}</span>
-                      <span className="font-mono text-xs opacity-75">{turno.horario}</span>
-                    </span>
-                  </span>
-                </label>
-              )
-            })}
+          <legend className="mb-2 text-sm font-medium">Como deseja definir o período?</legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <label className={`cursor-pointer rounded-md border p-3 transition-colors ${
+              forma === 'intervalo'
+                ? 'border-(--color-amber) bg-(--color-amber-soft) text-(--color-amber)'
+                : 'border-(--color-border) bg-white hover:bg-black/[0.02]'
+            }`}>
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="forma-indisponibilidade"
+                  checked={forma === 'intervalo'}
+                  onChange={() => alterarForma('intervalo')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Intervalo personalizado</span>
+                  <span className="text-xs opacity-75">Escolha o início e o fim exatos</span>
+                </span>
+              </span>
+            </label>
+            <label className={`cursor-pointer rounded-md border p-3 transition-colors ${
+              forma === 'turnos'
+                ? 'border-(--color-amber) bg-(--color-amber-soft) text-(--color-amber)'
+                : 'border-(--color-border) bg-white hover:bg-black/[0.02]'
+            }`}>
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="forma-indisponibilidade"
+                  checked={forma === 'turnos'}
+                  onChange={() => alterarForma('turnos')}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Data e turnos</span>
+                  <span className="text-xs opacity-75">Selecione manhã, tarde e/ou noite</span>
+                </span>
+              </span>
+            </label>
           </div>
         </fieldset>
+
+        {forma === 'intervalo' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium">Início</span>
+              <input
+                type="datetime-local"
+                value={inicio}
+                onChange={(e) => {
+                  setInicio(e.target.value)
+                  limparConfirmacao()
+                }}
+                className="input"
+                disabled={reservasAfetadas.length > 0}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium">Fim</span>
+              <input
+                type="datetime-local"
+                value={fim}
+                min={inicio}
+                onChange={(e) => {
+                  setFim(e.target.value)
+                  limparConfirmacao()
+                }}
+                className="input"
+                disabled={reservasAfetadas.length > 0}
+                required
+              />
+            </label>
+          </div>
+        ) : (
+          <>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium">Data</span>
+              <input
+                type="date"
+                value={data}
+                min={dataLocalHoje()}
+                onChange={(e) => {
+                  setData(e.target.value)
+                  limparConfirmacao()
+                }}
+                className="input"
+                disabled={reservasAfetadas.length > 0}
+                required
+              />
+            </label>
+
+            <fieldset disabled={reservasAfetadas.length > 0}>
+              <legend className="mb-2 text-sm font-medium">Turnos afetados</legend>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {TURNOS_INDISPONIBILIDADE.map((turno) => {
+                  const selecionado = turnos.includes(turno.id)
+                  return (
+                    <label
+                      key={turno.id}
+                      className={`cursor-pointer rounded-md border p-3 transition-colors ${
+                        selecionado
+                          ? 'border-(--color-amber) bg-(--color-amber-soft) text-(--color-amber)'
+                          : 'border-(--color-border) bg-white hover:bg-black/[0.02]'
+                      }`}
+                    >
+                      <span className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={selecionado}
+                          onChange={() => alternarTurno(turno.id)}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium">{turno.nome}</span>
+                          <span className="font-mono text-xs opacity-75">{turno.horario}</span>
+                        </span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </fieldset>
+          </>
+        )}
 
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Justificativa pública</span>
@@ -887,7 +742,7 @@ function InterdicaoEmergencialForm({
             className="input"
             rows={3}
             maxLength={500}
-            placeholder="Ex: Falta de energia programada no campus"
+            placeholder="Ex: Falta de energia, dedetização ou calibração"
             disabled={reservasAfetadas.length > 0}
             required
           />
@@ -898,7 +753,7 @@ function InterdicaoEmergencialForm({
 
         {reservasAfetadas.length === 0 ? (
           <p className="rounded-md border border-(--color-amber)/30 bg-(--color-amber-soft) p-3 text-xs text-(--color-amber)">
-            Nenhuma alteração será gravada antes da revisão das reservas afetadas.
+            O período ficará bloqueado para novas reservas. Se houver reservas ativas, você poderá revisá-las antes de confirmar o cancelamento e os avisos.
           </p>
         ) : (
           <div className="rounded-lg border border-(--color-coral)/40 bg-(--color-coral-soft) p-4">
@@ -906,7 +761,7 @@ function InterdicaoEmergencialForm({
               {reservasAfetadas.length} reserva(s) serão cancelada(s)
             </h3>
             <p className="mt-1 text-sm text-(--color-ink-soft)">
-              Revise os usuários afetados. Ao confirmar, as reservas passarão para “Cancelada pela Administração” e todos receberão a justificativa pública.
+              Revise os usuários afetados. Ao confirmar, a indisponibilidade e os cancelamentos serão gravados juntos, e todos receberão a justificativa pública.
             </p>
 
             <div className="mt-3 max-h-64 space-y-2 overflow-y-auto pr-1 scrollbar-thin">
@@ -946,11 +801,11 @@ function InterdicaoEmergencialForm({
               </button>
               <button
                 type="button"
-                onClick={() => enviarInterdicao(true)}
+                onClick={() => enviarIndisponibilidade(true)}
                 disabled={salvando}
                 className="inline-flex items-center justify-center rounded-md bg-(--color-coral) px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {salvando ? 'cancelando reservas…' : 'confirmar interdição e avisar'}
+                {salvando ? 'cancelando reservas…' : 'confirmar indisponibilidade e avisar'}
               </button>
             </>
           ) : (
@@ -961,7 +816,7 @@ function InterdicaoEmergencialForm({
               <button
                 type="submit"
                 className="btn-primary"
-                disabled={salvando || turnos.length === 0 || !justificativa.trim()}
+                disabled={salvando || !justificativa.trim() || (forma === 'turnos' && turnos.length === 0)}
               >
                 {salvando ? 'verificando reservas…' : 'continuar'}
               </button>
@@ -1100,7 +955,7 @@ function RecursoForm({
             ))}
           </select>
           <span className="mt-1 block text-xs text-(--color-ink-soft)">
-            Use “interditar período” para uma manutenção programada ou “interdição emergencial” para cancelar reservas por data e turnos.
+            Use “indisponibilizar” para bloquear a agenda por um intervalo exato ou por data e turnos.
           </span>
         </label>
 

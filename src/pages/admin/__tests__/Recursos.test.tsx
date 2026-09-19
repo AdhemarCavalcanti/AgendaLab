@@ -94,7 +94,7 @@ describe('AdminRecursos Page', () => {
     expect(screen.queryByText('Sala A')).not.toBeInTheDocument()
   })
 
-  it('interdita um período de manutenção com justificativa', async () => {
+  it('indisponibiliza um recurso usando um intervalo personalizado', async () => {
     const user = userEvent.setup()
 
     render(
@@ -104,13 +104,18 @@ describe('AdminRecursos Page', () => {
     )
 
     await screen.findByText('Sala A')
-    await user.click(screen.getAllByRole('button', { name: /interditar período/i })[0])
+    const botoesIndisponibilizar = screen.getAllByRole('button', { name: /^indisponibilizar$/i })
+    expect(botoesIndisponibilizar).toHaveLength(mockSalas.length)
+    await user.click(botoesIndisponibilizar[0])
+
+    expect(screen.getByRole('heading', { name: /indisponibilizar recurso: sala a/i })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /intervalo personalizado/i })).toBeChecked()
 
     const inicio = '2026-11-10T08:00'
     const fim = '2026-11-10T12:00'
     fireEvent.change(screen.getByLabelText('Início'), { target: { value: inicio } })
     fireEvent.change(screen.getByLabelText('Fim'), { target: { value: fim } })
-    await user.type(screen.getByRole('textbox', { name: /^justificativa$/i }), 'Calibração de sensores')
+    await user.type(screen.getByRole('textbox', { name: /justificativa pública/i }), 'Calibração de sensores')
     await user.click(screen.getByRole('button', { name: /continuar/i }))
 
     await waitFor(() => {
@@ -124,10 +129,10 @@ describe('AdminRecursos Page', () => {
         p_ids_reservas_confirmadas: null,
       })
     })
-    expect(await screen.findByText('Interdição criada com sucesso.')).toBeInTheDocument()
+    expect(await screen.findByText('Indisponibilidade criada com sucesso.')).toBeInTheDocument()
   })
 
-  it('interdita turnos, confirma as reservas afetadas e envia a justificativa pública', async () => {
+  it('indisponibiliza um recurso por data e turnos usando o mesmo fluxo', async () => {
     const user = userEvent.setup()
 
     vi.mocked(supabase.rpc)
@@ -163,7 +168,8 @@ describe('AdminRecursos Page', () => {
 
     await screen.findByText('Sala A')
 
-    await user.click(screen.getAllByRole('button', { name: /interdição emergencial/i })[0])
+    await user.click(screen.getAllByRole('button', { name: /^indisponibilizar$/i })[0])
+    await user.click(screen.getByRole('radio', { name: /data e turnos/i }))
     await user.click(screen.getByRole('checkbox', { name: /manhã/i }))
     await user.click(screen.getByRole('checkbox', { name: /noite/i }))
     await user.type(
@@ -183,7 +189,7 @@ describe('AdminRecursos Page', () => {
       p_ids_reservas_confirmadas: null,
     })
 
-    await user.click(screen.getByRole('button', { name: /confirmar interdição e avisar/i }))
+    await user.click(screen.getByRole('button', { name: /confirmar indisponibilidade e avisar/i }))
 
     await waitFor(() => {
       expect(supabase.rpc).toHaveBeenNthCalledWith(2, 'interditar_recurso_emergencial', {
