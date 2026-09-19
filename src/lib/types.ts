@@ -62,10 +62,12 @@ export interface ReservaSala {
 export interface ReservaEquipamento {
   id: number
   id_equipamento: number
+  id_reserva_sala: number | null
   id_usuario: number
   id_adm: number | null
   inicio: string
   fim: string
+  quantidade: number | null
   observacao: string | null
   status: StatusReserva
   cancelada_por_administracao: boolean

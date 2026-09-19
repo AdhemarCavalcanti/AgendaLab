@@ -16,6 +16,11 @@ interface Solicitacao {
   status_devolucao?: 'pendente' | 'devolvido'
   quantidade?: number
   detalhe?: string
+  acessorios?: Array<{
+    nome: string
+    quantidade: number
+  }>
+  salaVinculada?: string
 }
 
 export function AdminAprovacoes() {
@@ -44,14 +49,14 @@ export function AdminAprovacoes() {
       // 2. Equipamentos pendentes de aprovação
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, motivo, observacao, quantidade, status, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, id_reserva_sala, inicio, fim, motivo, observacao, quantidade, status, usuarios(nome, email, matricula)')
         .eq('status', 'pendente')
         .order('inicio', { ascending: true }),
 
       // 3. Equipamentos APROVADOS que ainda estão PENDENTES DE DEVOLUÇÃO
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, inicio, fim, observacao, quantidade, status, status_devolucao, usuarios(nome, email, matricula)')
+        .select('id, id_equipamento, id_reserva_sala, inicio, fim, observacao, quantidade, status, status_devolucao, usuarios(nome, email, matricula), reservas_salas(id_sala)')
         .eq('status', 'aprovada')
         .eq('status_devolucao', 'pendente')
         .order('inicio', { ascending: true }),
@@ -67,6 +72,18 @@ export function AdminAprovacoes() {
       (resListaEquip.data ?? []).map((e: any) => [e.id, e.nome])
     )
 
+    const acessoriosPorReservaSala = new Map<number, NonNullable<Solicitacao['acessorios']>>()
+    for (const reserva of (resEquip.data ?? []) as any[]) {
+      if (reserva.id_reserva_sala === null || reserva.id_reserva_sala === undefined) continue
+      const idReservaSala = Number(reserva.id_reserva_sala)
+      const atuais = acessoriosPorReservaSala.get(idReservaSala) ?? []
+      atuais.push({
+        nome: mapaEquip.get(reserva.id_equipamento) ?? `Equipamento #${reserva.id_equipamento}`,
+        quantidade: Number(reserva.quantidade ?? 1),
+      })
+      acessoriosPorReservaSala.set(idReservaSala, atuais)
+    }
+
     const itensSalas: Solicitacao[] = (resSalas.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'sala',
@@ -78,21 +95,24 @@ export function AdminAprovacoes() {
       fim: r.fim,
       status: r.status,
       detalhe: r.motivo ? `Motivo: ${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : `${r.quantidade_pessoas ?? '—'} pessoa(s)`,
+      acessorios: acessoriosPorReservaSala.get(r.id) ?? [],
     }))
 
-    const itensEquip: Solicitacao[] = (resEquip.data ?? []).map((r: any) => ({
-      id: r.id,
-      tipo: 'equipamento',
-      recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
-      usuarioNome: r.usuarios?.nome ?? 'Usuário',
-      usuarioEmail: r.usuarios?.email ?? undefined,
-      usuarioMatricula: r.usuarios?.matricula ?? undefined,
-      inicio: r.inicio,
-      fim: r.fim,
-      status: r.status,
-      quantidade: r.quantidade ?? 1,
-      detalhe: r.motivo ? `Motivo: ${r.motivo} · Quantidade: ${r.quantidade ?? 1}` : `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
-    }))
+    const itensEquip: Solicitacao[] = (resEquip.data ?? [])
+      .filter((r: any) => r.id_reserva_sala === null || r.id_reserva_sala === undefined)
+      .map((r: any) => ({
+        id: r.id,
+        tipo: 'equipamento',
+        recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
+        usuarioNome: r.usuarios?.nome ?? 'Usuário',
+        usuarioEmail: r.usuarios?.email ?? undefined,
+        usuarioMatricula: r.usuarios?.matricula ?? undefined,
+        inicio: r.inicio,
+        fim: r.fim,
+        status: r.status,
+        quantidade: r.quantidade ?? 1,
+        detalhe: r.motivo ? `Motivo: ${r.motivo} · Quantidade: ${r.quantidade ?? 1}` : `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
+      }))
 
     const devolucoesEquip: Solicitacao[] = (resDevolucoes.data ?? []).map((r: any) => ({
       id: r.id,
@@ -107,6 +127,9 @@ export function AdminAprovacoes() {
       status_devolucao: r.status_devolucao,
       quantidade: r.quantidade ?? 1,
       detalhe: `Quantidade retirada: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
+      salaVinculada: r.id_reserva_sala
+        ? mapaSalas.get(Number(r.reservas_salas?.id_sala)) ?? `Reserva de sala #${r.id_reserva_sala}`
+        : undefined,
     }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime()))
@@ -298,6 +321,12 @@ export function AdminAprovacoes() {
                     {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
+                  {item.acessorios && item.acessorios.length > 0 && (
+                    <p className="mt-1 text-sm text-(--color-ink-soft)">
+                      <span className="font-medium text-(--color-ink)">Acessórios: </span>
+                      {item.acessorios.map((acessorio) => `${acessorio.nome} × ${acessorio.quantidade}`).join(', ')}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -343,6 +372,11 @@ export function AdminAprovacoes() {
                 <p className="mt-1 font-mono text-sm text-(--color-ink-soft)">
                   {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </p>
+                {item.salaVinculada && (
+                  <p className="mt-1 text-sm text-(--color-ink-soft)">
+                    <span className="font-medium text-(--color-ink)">Acessório de: </span>{item.salaVinculada}
+                  </p>
+                )}
                 {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
               </div>
               <button

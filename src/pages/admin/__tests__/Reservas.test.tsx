@@ -46,6 +46,17 @@ describe('AdminReservas Page', () => {
       id_usuario: 2,
       usuarios: { nome: 'Aluno Marcos' },
     },
+    {
+      id: 3,
+      id_equipamento: 21,
+      id_reserva_sala: 1,
+      inicio: '2026-11-01T10:00:00.000Z',
+      fim: '2026-11-01T12:00:00.000Z',
+      status: 'aprovada',
+      quantidade: 2,
+      id_usuario: 1,
+      usuarios: { nome: 'Prof. Silva' },
+    },
   ]
 
   beforeEach(() => {
@@ -92,7 +103,13 @@ describe('AdminReservas Page', () => {
       }
       if (table === 'equipamentos') {
         return {
-          select: vi.fn().mockResolvedValue({ data: [{ id: 20, nome: 'Câmera Térmica' }], error: null }),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              { id: 20, nome: 'Câmera Térmica' },
+              { id: 21, nome: 'Kit Didático' },
+            ],
+            error: null,
+          }),
         } as any
       }
       return { select: vi.fn().mockReturnThis() } as any
@@ -110,6 +127,7 @@ describe('AdminReservas Page', () => {
     expect(screen.getByText('Prof. Silva')).toBeInTheDocument()
     expect(screen.getByText('Câmera Térmica')).toBeInTheDocument()
     expect(screen.getByText('Aluno Marcos')).toBeInTheDocument()
+    expect(screen.getByText(/Kit Didático × 2/i)).toBeInTheDocument()
   })
 
   it('filtra reservas por tipo de recurso (apenas equipamentos)', async () => {

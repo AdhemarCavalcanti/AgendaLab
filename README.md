@@ -73,6 +73,16 @@ supabase/sql/interdicao_emergencial.sql
 
 A migração define os turnos manhã (07h–12h), tarde (12h–18h) e noite (18h–22h), cria a RPC transacional `interditar_recurso_emergencial` e registra em cada reserva a origem e a justificativa do cancelamento administrativo. Bloqueios, cancelamentos e alertas são gravados atomicamente; se qualquer etapa falhar, nenhuma alteração parcial é mantida.
 
+### 🎒 Acessórios na reserva de sala
+
+Para permitir que uma reserva de sala inclua projetores, kits didáticos e outros itens do acervo, aplique depois de todas as migrações de concorrência, manutenção e interdição emergencial listadas acima:
+
+```text
+supabase/sql/acessorios_reserva_sala.sql
+```
+
+A migração vincula as reservas de equipamento à sala, atualiza `solicitar_reserva` para criar todo o pedido em uma única transação e sincroniza aprovação ou cancelamento. As quantidades dos acessórios são contabilizadas pelas mesmas triggers de estoque das reservas avulsas, inclusive sob solicitações concorrentes.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -140,6 +150,7 @@ erDiagram
         bigint id PK
         bigint id_usuario FK
         bigint id_equipamento FK
+        bigint id_reserva_sala FK
         bigint id_adm FK
         timestamptz inicio
         timestamptz fim
@@ -156,6 +167,7 @@ erDiagram
     usuarios ||--o{ reservas_equipamentos : "realiza"
     salas ||--o{ reservas_salas : "reservada_em"
     equipamentos ||--o{ reservas_equipamentos : "reservado_em"
+    reservas_salas ||--o{ reservas_equipamentos : "inclui_acessorio"
     administradores ||--o{ reservas_salas : "gerencia"
     administradores ||--o{ reservas_equipamentos : "gerencia"
     salas ||--o{ bloqueios_manutencao : "interditada_em"
@@ -191,6 +203,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 - **Manutenção programada por período**: o administrador escolhe o início e o fim da interdição e informa uma justificativa obrigatória. A faixa aparece destacada no calendário, impede novas solicitações e, após revisão, cancela e notifica reservas ativas que coincidam com o intervalo.
 - **Interdição emergencial**: o administrador escolhe a data e um ou mais turnos (manhã, tarde e noite), informa uma justificativa pública e revisa os usuários afetados. Na confirmação, os períodos são bloqueados, todas as reservas ativas são marcadas como “Cancelada pela Administração” e os usuários recebem alertas automáticos — tudo na mesma transação.
 - **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
+- **Acessórios opcionais da sala**: o formulário lista somente itens com estoque disponível no período, permite escolher quantidades e envia sala + acessórios atomicamente. O histórico apresenta os itens vinculados em um único resumo.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
 ## Área do Usuário & Perfil

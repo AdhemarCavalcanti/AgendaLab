@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { RecursoAgenda } from '../RecursoAgenda'
@@ -54,6 +54,24 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
       limit: vi.fn(() => query),
       then(resolve: (value: any) => any, reject?: (reason: any) => any) {
         return Promise.resolve({ data: [], error: null }).then(resolve, reject)
+      },
+    }
+    return query
+  }
+
+  function criarConsultaComResultado(data: any[]) {
+    const query: any = {
+      select: vi.fn(() => query),
+      eq: vi.fn(() => query),
+      in: vi.fn(() => query),
+      gte: vi.fn(() => query),
+      lte: vi.fn(() => query),
+      lt: vi.fn(() => query),
+      gt: vi.fn(() => query),
+      limit: vi.fn(() => query),
+      order: vi.fn(() => query),
+      then(resolve: (value: any) => any, reject?: (reason: any) => any) {
+        return Promise.resolve({ data, error: null }).then(resolve, reject)
       },
     }
     return query
@@ -294,5 +312,77 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
     expect(screen.getByText('Excede a lotação máxima da sala.')).toBeInTheDocument()
     const btnConfirmar = screen.getByRole('button', { name: /confirmar solicitação/i })
     expect(btnConfirmar).toBeDisabled()
+  })
+
+  it('seleciona acessórios disponíveis, consolida o resumo e envia as quantidades na mesma RPC', async () => {
+    const user = userEvent.setup()
+    setupAuth('aluno', 7)
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 4, nome: 'Laboratório de Física', lotacao: 20, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === 'equipamentos') {
+        return criarConsultaComResultado([
+          { id: 10, nome: 'Projetor HD', quantidade: 3, status: 'livre' },
+          { id: 11, nome: 'Kit Didático', quantidade: 2, status: 'livre' },
+        ])
+      }
+      if (table === 'reservas_equipamentos') {
+        return criarConsultaComResultado([
+          { id_equipamento: 10, quantidade: 1 },
+        ])
+      }
+      return criarConsultaVazia()
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { sucesso: true, id: 99, tipo: 'sala' },
+      error: null,
+    } as any)
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/4']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Laboratório de Física')).toBeInTheDocument()
+    const slotButton = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('15:00 – 16:00')
+    )
+    await user.click(slotButton!)
+    await user.click(screen.getByRole('button', { name: /solicitar reserva/i }))
+
+    expect(await screen.findByText('Projetor HD')).toBeInTheDocument()
+    expect(screen.getAllByText(/2 disponível\(is\)/i)).toHaveLength(2)
+
+    await user.click(screen.getByRole('checkbox', { name: /Projetor HD/i }))
+    const quantidadeProjetor = screen.getByRole('spinbutton', { name: 'Quantidade de Projetor HD' })
+    await user.clear(quantidadeProjetor)
+    await user.type(quantidadeProjetor, '2')
+
+    expect(screen.getByText('Acessórios:', { exact: false }).parentElement).toHaveTextContent('Projetor HD × 2')
+    await user.click(screen.getByRole('button', { name: /confirmar solicitação/i }))
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith(
+        'solicitar_reserva',
+        expect.objectContaining({
+          p_tipo: 'sala',
+          p_id_recurso: 4,
+          p_id_usuario: 7,
+          p_acessorios: [{ id_equipamento: 10, quantidade: 2 }],
+        })
+      )
+    })
   })
 })

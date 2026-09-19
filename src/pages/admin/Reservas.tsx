@@ -15,6 +15,11 @@ interface Item {
   detalhe?: string
   canceladaPorAdministracao: boolean
   justificativaCancelamento?: string
+  acessorios?: Array<{
+    nome: string
+    quantidade: number
+    status: StatusReserva
+  }>
 }
 
 // Filtros alinhados com o tipo 'StatusReserva' ('pendente', 'aprovada', 'cancelada')
@@ -60,7 +65,7 @@ export function AdminReservas() {
 
     let queryEquip = supabase
       .from('reservas_equipamentos')
-      .select('id, id_equipamento, inicio, fim, status, observacao, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome)')
+      .select('id, id_equipamento, id_reserva_sala, inicio, fim, status, quantidade, observacao, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome)')
       .order('inicio', { ascending: false })
 
     // Aplica o filtro se for usuário comum (aluno) e tivermos encontrado o idUsuarioLogado
@@ -85,6 +90,19 @@ export function AdminReservas() {
       (resListaEquip.data ?? []).map((e: any) => [e.id, e.nome])
     )
 
+    const acessoriosPorReservaSala = new Map<number, NonNullable<Item['acessorios']>>()
+    for (const reserva of (resEquip.data ?? []) as any[]) {
+      if (reserva.id_reserva_sala === null || reserva.id_reserva_sala === undefined) continue
+      const idReservaSala = Number(reserva.id_reserva_sala)
+      const atuais = acessoriosPorReservaSala.get(idReservaSala) ?? []
+      atuais.push({
+        nome: mapaEquip.get(reserva.id_equipamento) ?? `Equipamento #${reserva.id_equipamento}`,
+        quantidade: Number(reserva.quantidade ?? 1),
+        status: reserva.status,
+      })
+      acessoriosPorReservaSala.set(idReservaSala, atuais)
+    }
+
     const itensSalas: Item[] = (resSalas.data ?? []).map((r: any) => ({
       id: r.id,
       tipo: 'sala',
@@ -96,20 +114,23 @@ export function AdminReservas() {
       detalhe: r.motivo ? `${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : undefined,
       canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
       justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
+      acessorios: acessoriosPorReservaSala.get(r.id) ?? [],
     }))
 
-    const itensEquip: Item[] = (resEquip.data ?? []).map((r: any) => ({
-      id: r.id,
-      tipo: 'equipamento',
-      recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
-      usuarioNome: r.usuarios?.nome ?? 'Usuário',
-      inicio: r.inicio,
-      fim: r.fim,
-      status: r.status,
-      detalhe: r.observacao ?? undefined,
-      canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
-      justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
-    }))
+    const itensEquip: Item[] = (resEquip.data ?? [])
+      .filter((r: any) => r.id_reserva_sala === null || r.id_reserva_sala === undefined)
+      .map((r: any) => ({
+        id: r.id,
+        tipo: 'equipamento',
+        recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
+        usuarioNome: r.usuarios?.nome ?? 'Usuário',
+        inicio: r.inicio,
+        fim: r.fim,
+        status: r.status,
+        detalhe: `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · ${r.observacao}` : ''}`,
+        canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
+        justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
+      }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime()))
     setLoading(false)
@@ -157,6 +178,11 @@ export function AdminReservas() {
       const status = `"${item.canceladaPorAdministracao ? 'Cancelada pela Administração' : item.status}"`
       const detalhes = [
         item.detalhe,
+        item.acessorios && item.acessorios.length > 0
+          ? `Acessórios: ${item.acessorios.map((acessorio) => (
+              `${acessorio.nome} x ${acessorio.quantidade}${acessorio.status === 'cancelada' ? ' (cancelado)' : ''}`
+            )).join(', ')}`
+          : undefined,
         item.justificativaCancelamento
           ? `Justificativa da Administração: ${item.justificativaCancelamento}`
           : undefined,
@@ -255,6 +281,14 @@ export function AdminReservas() {
                     <p className="font-medium">{item.recursoNome}</p>
                     <p className="font-mono text-xs uppercase text-(--color-ink-soft)">{item.tipo}</p>
                     {item.detalhe && <p className="mt-1 text-xs text-(--color-ink-soft)">{item.detalhe}</p>}
+                    {item.acessorios && item.acessorios.length > 0 && (
+                      <p className="mt-1 text-xs text-(--color-ink-soft)">
+                        <span className="font-medium text-(--color-ink)">Acessórios: </span>
+                        {item.acessorios.map((acessorio) => (
+                          `${acessorio.nome} × ${acessorio.quantidade}${acessorio.status === 'cancelada' ? ' (cancelado)' : ''}`
+                        )).join(', ')}
+                      </p>
+                    )}
                     {item.justificativaCancelamento && (
                       <p className="mt-1 text-xs text-(--color-coral)">
                         Justificativa da Administração: {item.justificativaCancelamento}

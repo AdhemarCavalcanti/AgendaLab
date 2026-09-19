@@ -39,13 +39,28 @@ describe('AdminAprovacoes Page', () => {
     {
       id: 5,
       id_equipamento: 20,
+      id_reserva_sala: 1,
       inicio: '2026-10-19T09:00:00.000Z',
       fim: '2026-10-19T11:00:00.000Z',
       observacao: 'Uso em bancada',
       quantidade: 1,
       status: 'aprovada',
       status_devolucao: 'pendente',
+      reservas_salas: { id_sala: 10 },
       usuarios: { nome: 'Ana Pesquisadora', email: 'ana@ufpe.br', matricula: '20232' },
+    },
+  ]
+
+  const mockEquipPendentes = [
+    {
+      id: 6,
+      id_equipamento: 21,
+      id_reserva_sala: 1,
+      inicio: '2026-10-20T10:00:00.000Z',
+      fim: '2026-10-20T12:00:00.000Z',
+      quantidade: 2,
+      status: 'pendente',
+      usuarios: { nome: 'Carlos Aluno', email: 'carlos@ufpe.br', matricula: '20231' },
     },
   ]
 
@@ -96,6 +111,11 @@ describe('AdminAprovacoes Page', () => {
         const chain: any = {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockImplementation((col: string, val: string) => {
+            if (col === 'status' && val === 'pendente') {
+              return {
+                order: vi.fn().mockResolvedValue({ data: mockEquipPendentes, error: null }),
+              }
+            }
             if (col === 'status_devolucao' && val === 'pendente') {
               return {
                 order: vi.fn().mockResolvedValue({ data: mockEquipDevolucoes, error: null }),
@@ -115,7 +135,13 @@ describe('AdminAprovacoes Page', () => {
       }
       if (table === 'equipamentos') {
         return {
-          select: vi.fn().mockResolvedValue({ data: [{ id: 20, nome: 'Multímetro Digital' }], error: null }),
+          select: vi.fn().mockResolvedValue({
+            data: [
+              { id: 20, nome: 'Multímetro Digital' },
+              { id: 21, nome: 'Kit Didático' },
+            ],
+            error: null,
+          }),
         } as any
       }
       return { select: vi.fn().mockReturnThis() } as any
@@ -133,6 +159,7 @@ describe('AdminAprovacoes Page', () => {
 
     expect(await screen.findByText(/Laboratório Beta/i)).toBeInTheDocument()
     expect(screen.getByText(/Carlos Aluno/i)).toBeInTheDocument()
+    expect(screen.getByText(/Kit Didático × 2/i)).toBeInTheDocument()
 
     const btnAprovar = screen.getByRole('button', { name: /aprovar/i })
     await user.click(btnAprovar)
@@ -218,6 +245,7 @@ describe('AdminAprovacoes Page', () => {
 
     expect(await screen.findByText(/Multímetro Digital/i)).toBeInTheDocument()
     expect(screen.getByText(/Ana Pesquisadora/i)).toBeInTheDocument()
+    expect(screen.getByText('Acessório de:', { exact: false }).parentElement).toHaveTextContent('Laboratório Beta')
 
     const btnDevolver = screen.getByRole('button', { name: /devolvido/i })
     await user.click(btnDevolver)

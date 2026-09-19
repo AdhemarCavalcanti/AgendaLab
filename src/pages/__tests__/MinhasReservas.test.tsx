@@ -48,6 +48,16 @@ describe('MinhasReservas Page', () => {
       cancelada_por_administracao: true,
       justificativa_cancelamento: 'Falta de energia no campus',
     },
+    {
+      id: 202,
+      id_equipamento: 11,
+      id_reserva_sala: 101,
+      inicio: '2026-10-15T10:00:00.000Z',
+      fim: '2026-10-15T12:00:00.000Z',
+      status: 'pendente',
+      quantidade: 2,
+      observacao: null,
+    },
   ]
 
   const mockSalas = [
@@ -55,7 +65,10 @@ describe('MinhasReservas Page', () => {
     { id_sala: 2, nome: 'Anfiteatro B' },
   ]
 
-  const mockEquipamentos = [{ id: 10, nome: 'Projetor HD' }]
+  const mockEquipamentos = [
+    { id: 10, nome: 'Projetor HD' },
+    { id: 11, nome: 'Kit Didático' },
+  ]
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -123,6 +136,7 @@ describe('MinhasReservas Page', () => {
     expect(screen.getByText('Anfiteatro B')).toBeInTheDocument()
     expect(screen.getByText('Projetor HD')).toBeInTheDocument()
     expect(screen.getByText(/Estudo de Física Teórica/i)).toBeInTheDocument()
+    expect(screen.getByText(/Kit Didático × 2/i)).toBeInTheDocument()
     expect(screen.getByText('Cancelada pela Administração')).toBeInTheDocument()
     expect(screen.getByText(/Falta de energia no campus/i)).toBeInTheDocument()
   })

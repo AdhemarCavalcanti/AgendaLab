@@ -29,6 +29,7 @@ public,notificacoes,criado_em,timestamp with time zone,NO,
 public,reservas_equipamentos,id,bigint,NO,PRIMARY KEY
 public,reservas_equipamentos,id_usuario,bigint,NO,FOREIGN KEY
 public,reservas_equipamentos,id_equipamento,bigint,NO,
+public,reservas_equipamentos,id_reserva_sala,bigint,YES,FOREIGN KEY
 public,reservas_equipamentos,id_adm,bigint,YES,
 public,reservas_equipamentos,inicio,timestamp with time zone,NO,
 public,reservas_equipamentos,fim,timestamp with time zone,NO,

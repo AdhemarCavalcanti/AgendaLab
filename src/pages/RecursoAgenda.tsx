@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
@@ -29,6 +29,13 @@ const MSG_CONFLITO_CONCORRENCIA =
   'Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período.'
 
 const MSG_MANUTENCAO = 'Este recurso está em manutenção no período selecionado. Escolha outro horário.'
+
+const MSG_CONFLITO_ACESSORIO =
+  'A sala ou um dos acessórios selecionados não está mais disponível. Revise o período e as quantidades.'
+
+interface AcessorioDisponivel extends Equipamento {
+  disponivel: number
+}
 
 function isErroConcorrencia(error: any): boolean {
   if (!error) return false
@@ -72,6 +79,11 @@ export function RecursoAgenda() {
   const [enviando, setEnviando] = useState(false)
   const [formErro, setFormErro] = useState<string | null>(null)
   const [sucesso, setSucesso] = useState(false)
+  const [acessorios, setAcessorios] = useState<AcessorioDisponivel[]>([])
+  const [acessoriosSelecionados, setAcessoriosSelecionados] = useState<Record<number, number>>({})
+  const [carregandoAcessorios, setCarregandoAcessorios] = useState(false)
+  const [erroAcessorios, setErroAcessorios] = useState<string | null>(null)
+  const carregamentoAcessoriosId = useRef(0)
 
   const dias = useMemo(() => proximosDias(14), [])
   const tabela = tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
@@ -146,6 +158,74 @@ export function RecursoAgenda() {
     }
   }
 
+  async function carregarAcessorios(inicio: Date, fim: Date) {
+    const requestId = ++carregamentoAcessoriosId.current
+    setCarregandoAcessorios(true)
+    setErroAcessorios(null)
+
+    const inicioISO = inicio.toISOString()
+    const fimISO = fim.toISOString()
+
+    const [inventarioResult, reservasResult, bloqueiosResult] = await Promise.all([
+      supabase
+        .from('equipamentos')
+        .select('id, nome, quantidade, status')
+        .eq('status', 'livre')
+        .gt('quantidade', 0),
+      supabase
+        .from('reservas_equipamentos')
+        .select('id_equipamento, quantidade')
+        .in('status', ['pendente', 'aprovada'])
+        .lt('inicio', fimISO)
+        .gt('fim', inicioISO),
+      supabase
+        .from('bloqueios_manutencao')
+        .select('id_equipamento, motivo')
+        .lt('inicio', fimISO)
+        .gt('fim', inicioISO),
+    ])
+
+    if (requestId !== carregamentoAcessoriosId.current) return
+
+    if (inventarioResult.error || reservasResult.error || bloqueiosResult.error) {
+      setAcessorios([])
+      setAcessoriosSelecionados({})
+      setErroAcessorios('Não foi possível consultar os acessórios disponíveis. Tente novamente.')
+      setCarregandoAcessorios(false)
+      return
+    }
+
+    const quantidadesEmUso = new Map<number, number>()
+    for (const reserva of (reservasResult.data ?? []) as any[]) {
+      const idEquipamento = Number(reserva.id_equipamento)
+      quantidadesEmUso.set(
+        idEquipamento,
+        (quantidadesEmUso.get(idEquipamento) ?? 0) + Number(reserva.quantidade ?? 1)
+      )
+    }
+
+    const equipamentosBloqueados = new Set<number>(
+      ((bloqueiosResult.data ?? []) as any[])
+        .filter((bloqueio) => bloqueio.id_equipamento !== null)
+        .map((bloqueio) => Number(bloqueio.id_equipamento))
+    )
+
+    const disponiveis = ((inventarioResult.data ?? []) as Equipamento[])
+      .filter((equipamento) => equipamento.status === 'livre' && Number(equipamento.quantidade) > 0)
+      .map((equipamento) => ({
+        ...equipamento,
+        disponivel: equipamentosBloqueados.has(equipamento.id)
+          ? 0
+          : Math.max(0, Number(equipamento.quantidade) - (quantidadesEmUso.get(equipamento.id) ?? 0)),
+      }))
+      .filter((equipamento) => equipamento.disponivel > 0)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+
+    setAcessorios(disponiveis)
+    setAcessoriosSelecionados({})
+    setCarregandoAcessorios(false)
+  }
+
   useEffect(() => {
     carregarRecurso()
   }, [tipo, id])
@@ -185,6 +265,19 @@ export function RecursoAgenda() {
       supabase.removeChannel(channel)
     }
   }, [tipo, id, selectedDate, tabela, idNum])
+
+  useEffect(() => {
+    if (tipo === 'sala' && pendingSlot) {
+      void carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
+      return
+    }
+
+    carregamentoAcessoriosId.current += 1
+    setAcessorios([])
+    setAcessoriosSelecionados({})
+    setCarregandoAcessorios(false)
+    setErroAcessorios(null)
+  }, [tipo, pendingSlot])
 
   const estoqueTotal = tipo === 'equipamento' ? (recurso as Equipamento)?.quantidade ?? 0 : 0
 
@@ -232,6 +325,8 @@ export function RecursoAgenda() {
     setQtdPessoas(1)
     setQtdEquipamento(1)
     setAceitouRegras(false)
+    setAcessoriosSelecionados({})
+    if (tipo === 'sala') setCarregandoAcessorios(true)
     setPendingSlot({ inicio, fim })
   }
 
@@ -245,6 +340,25 @@ export function RecursoAgenda() {
 
     if (tipo === 'equipamento' && qtdEquipamento > disponivelNoSlot) {
       setFormErro(`A quantidade solicitada (${qtdEquipamento}) excede o estoque disponível para este horário (${disponivelNoSlot}).`)
+      return
+    }
+
+    const acessoriosPayload = tipo === 'sala'
+      ? acessorios
+          .filter((acessorio) => Object.prototype.hasOwnProperty.call(acessoriosSelecionados, acessorio.id))
+          .map((acessorio) => ({
+            id_equipamento: acessorio.id,
+            quantidade: acessoriosSelecionados[acessorio.id],
+          }))
+      : []
+
+    const acessorioInvalido = acessoriosPayload.find(({ id_equipamento, quantidade }) => {
+      const acessorio = acessorios.find((item) => item.id === id_equipamento)
+      return !acessorio || !Number.isInteger(quantidade) || quantidade < 1 || quantidade > acessorio.disponivel
+    })
+
+    if (acessorioInvalido) {
+      setFormErro('Revise as quantidades dos acessórios selecionados.')
       return
     }
 
@@ -331,6 +445,7 @@ export function RecursoAgenda() {
       p_quantidade_pessoas: tipo === 'sala' ? qtdPessoas : null,
       p_quantidade_equipamento: tipo === 'equipamento' ? qtdEquipamento : null,
       p_observacao: observacao || null,
+      p_acessorios: acessoriosPayload,
     })
 
     if (!rpcError) {
@@ -345,6 +460,7 @@ export function RecursoAgenda() {
         setObservacao('')
         setQtdPessoas(1)
         setQtdEquipamento(1)
+        setAcessoriosSelecionados({})
       }, 1600)
       return
     }
@@ -354,13 +470,15 @@ export function RecursoAgenda() {
       setEnviando(false)
       setFormErro(rpcError.message || MSG_MANUTENCAO)
       await carregarOcupacoes()
+      if (tipo === 'sala') await carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
       return
     }
 
     if (isErroConcorrencia(rpcError)) {
       setEnviando(false)
-      setFormErro(MSG_CONFLITO_CONCORRENCIA)
+      setFormErro(acessoriosPayload.length > 0 ? MSG_CONFLITO_ACESSORIO : MSG_CONFLITO_CONCORRENCIA)
       await carregarOcupacoes()
+      if (tipo === 'sala') await carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
       return
     }
 
@@ -371,6 +489,12 @@ export function RecursoAgenda() {
       rpcError.code === '42883'
 
     if (isRpcNaoExiste) {
+      if (acessoriosPayload.length > 0) {
+        setEnviando(false)
+        setFormErro('A reserva conjunta de acessórios ainda não foi habilitada no banco de dados.')
+        return
+      }
+
       const payload: Record<string, unknown> = {
         [coluna]: idNum,
         id_usuario: meuIdUsuario,
@@ -414,6 +538,7 @@ export function RecursoAgenda() {
         setObservacao('')
         setQtdPessoas(1)
         setQtdEquipamento(1)
+        setAcessoriosSelecionados({})
       }, 1600)
       return
     }
@@ -422,6 +547,7 @@ export function RecursoAgenda() {
     setEnviando(false)
     setFormErro(rpcError.message)
     await carregarOcupacoes()
+    if (acessoriosPayload.length > 0) await carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
   }
 
   if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 font-mono text-sm text-(--color-ink-soft)">carregando…</p>
@@ -433,6 +559,12 @@ export function RecursoAgenda() {
   const equipamentoSemEstoque = tipo === 'equipamento' && (recurso as Equipamento).quantidade === 0
   const statusAtual = equipamentoSemEstoque ? 'manutenção' : recurso.status
   const indisponivel = recurso.status !== 'livre' || equipamentoSemEstoque
+  const acessoriosNoResumo = acessorios
+    .filter((acessorio) => Object.prototype.hasOwnProperty.call(acessoriosSelecionados, acessorio.id))
+    .map((acessorio) => ({
+      ...acessorio,
+      quantidadeSelecionada: acessoriosSelecionados[acessorio.id],
+    }))
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
@@ -515,10 +647,18 @@ export function RecursoAgenda() {
           ) : (
             <div className="space-y-4">
               <div className="rounded-md border border-(--color-border) bg-(--color-paper) p-3 font-mono text-sm">
-                <p>{nome}</p>
+                <p><span className="text-(--color-ink-soft)">{tipo === 'sala' ? 'Sala: ' : 'Equipamento: '}</span>{nome}</p>
                 <p className="text-(--color-ink-soft)">
                   {pendingSlot.inicio.toLocaleDateString('pt-BR')} · {pendingSlot.inicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {pendingSlot.fim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </p>
+                {tipo === 'sala' && (
+                  <p className="mt-2 border-t border-(--color-border) pt-2">
+                    <span className="text-(--color-ink-soft)">Acessórios: </span>
+                    {acessoriosNoResumo.length > 0
+                      ? acessoriosNoResumo.map((item) => `${item.nome} × ${item.quantidadeSelecionada}`).join(', ')
+                      : 'nenhum'}
+                  </p>
+                )}
               </div>
 
               {tipo === 'sala' && (
@@ -542,6 +682,85 @@ export function RecursoAgenda() {
                       <span className="mt-1 block text-xs text-(--color-coral)">Excede a lotação máxima da sala.</span>
                     )}
                   </label>
+
+                  <fieldset className="rounded-md border border-(--color-border) p-3">
+                    <legend className="px-1 text-sm font-medium">Acessórios adicionais (opcional)</legend>
+                    <p className="mb-3 text-xs text-(--color-ink-soft)">
+                      As quantidades são reservadas para o mesmo período da sala.
+                    </p>
+
+                    {carregandoAcessorios ? (
+                      <p className="font-mono text-xs text-(--color-ink-soft)">consultando disponibilidade…</p>
+                    ) : erroAcessorios ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-(--color-coral)">{erroAcessorios}</p>
+                        <button
+                          type="button"
+                          className="btn-secondary px-2 py-1 text-xs"
+                          onClick={() => void carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)}
+                        >
+                          tentar novamente
+                        </button>
+                      </div>
+                    ) : acessorios.length === 0 ? (
+                      <p className="text-xs text-(--color-ink-soft)">Nenhum acessório disponível neste período.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {acessorios.map((acessorio) => {
+                          const quantidadeSelecionada = acessoriosSelecionados[acessorio.id] ?? 0
+                          const selecionado = Object.prototype.hasOwnProperty.call(acessoriosSelecionados, acessorio.id)
+
+                          return (
+                            <div key={acessorio.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-black/[0.03] p-2.5">
+                              <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selecionado}
+                                  onChange={(e) => {
+                                    setAcessoriosSelecionados((atuais) => {
+                                      const proximos = { ...atuais }
+                                      if (e.target.checked) proximos[acessorio.id] = 1
+                                      else delete proximos[acessorio.id]
+                                      return proximos
+                                    })
+                                  }}
+                                />
+                                <span className="truncate text-sm">{acessorio.nome}</span>
+                                <span className="shrink-0 font-mono text-[11px] text-(--color-ink-soft)">
+                                  {acessorio.disponivel} disponível(is)
+                                </span>
+                              </label>
+
+                              {selecionado && (
+                                <label className="flex items-center gap-2 text-xs">
+                                  <span>Qtd.</span>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    max={acessorio.disponivel}
+                                    aria-label={`Quantidade de ${acessorio.nome}`}
+                                    value={quantidadeSelecionada}
+                                    onChange={(e) => {
+                                      const quantidade = Number(e.target.value)
+                                      setAcessoriosSelecionados((atuais) => ({ ...atuais, [acessorio.id]: quantidade }))
+                                    }}
+                                    className="input w-20 py-1"
+                                  />
+                                  {(!Number.isInteger(quantidadeSelecionada) ||
+                                    quantidadeSelecionada < 1 ||
+                                    quantidadeSelecionada > acessorio.disponivel) && (
+                                    <span className="text-(--color-coral)">
+                                      Informe entre 1 e {acessorio.disponivel}.
+                                    </span>
+                                  )}
+                                </label>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </fieldset>
                 </>
               )}
 
@@ -581,7 +800,7 @@ export function RecursoAgenda() {
                     Declaro que li e concordo com as regras de uso específicas deste recurso.
                   </span>
                 </label>
-            )}
+              )}
 
               {formErro && (
                 <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
@@ -598,8 +817,14 @@ export function RecursoAgenda() {
                   onClick={confirmarReserva}
                   disabled={
                     enviando ||
+                    (tipo === 'sala' && carregandoAcessorios) ||
                     (recurso.regras_uso && !aceitouRegras) ||
                     (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || qtdPessoas < 1)) ||
+                    (tipo === 'sala' && acessoriosNoResumo.some((item) =>
+                      !Number.isInteger(item.quantidadeSelecionada) ||
+                      item.quantidadeSelecionada < 1 ||
+                      item.quantidadeSelecionada > item.disponivel
+                    )) ||
                     (tipo === 'equipamento' && (disponivelNoSlot <= 0 || qtdEquipamento > disponivelNoSlot || qtdEquipamento < 1))
                   }
                 >
