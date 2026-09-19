@@ -385,4 +385,88 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
       )
     })
   })
+
+  it('aplica o limite de 2 salas reservadas somente para usuário do plano gratuito', async () => {
+    setupAuth('aluno', 1)
+    localStorage.removeItem('agendalab_plano')
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 9, nome: 'Sala Extra', lotacao: 8, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === 'reservas_salas') {
+        const query: any = {
+          select: vi.fn(() => query),
+          eq: vi.fn(() => query),
+          in: vi.fn(() => query),
+          gte: vi.fn(() => query),
+          lt: vi.fn(() => query),
+          gt: vi.fn(() => query),
+          then(resolve: (value: any) => any, reject?: (reason: any) => any) {
+            return Promise.resolve({
+              data: [
+                { id: 1, inicio: '2026-09-20T10:00:00.000Z', fim: '2026-09-20T12:00:00.000Z', status: 'aprovada' },
+                { id: 2, inicio: '2026-09-21T10:00:00.000Z', fim: '2026-09-21T12:00:00.000Z', status: 'pendente' },
+              ],
+              error: null,
+            }).then(resolve, reject)
+          },
+        }
+        return query
+      }
+      return criarConsultaVazia()
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/9']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Sala Extra')).toBeInTheDocument()
+    expect(
+      await screen.findByText(/Limite de 2 salas reservadas do plano gratuito atingido/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/grade de disponibilidade/i)).toBeInTheDocument()
+  })
+
+  it('não aplica limite de salas reservadas para administrador', async () => {
+    setupAuth('admin', null)
+    localStorage.removeItem('agendalab_plano')
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 9, nome: 'Sala Admin', lotacao: 8, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      return criarConsultaVazia()
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/9']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Sala Admin')).toBeInTheDocument()
+    expect(screen.queryByText(/Limite de 2 salas reservadas/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/Modo de visualização administrativa/i)).toBeInTheDocument()
+  })
 })

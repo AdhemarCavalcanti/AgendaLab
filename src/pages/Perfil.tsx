@@ -215,12 +215,12 @@ export function Perfil() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-3xl px-4 py-10 md:px-8">
       <div className="mb-8">
-        <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">
+        <p className="kicker">
           área do usuário · configurações
         </p>
-        <h1 className="font-display text-3xl font-bold">Meu Perfil</h1>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight">Meu Perfil</h1>
         <p className="mt-1 text-sm text-(--color-ink-soft)">
           Visualize suas informações cadastrais e gerencie as preferências da sua conta.
         </p>
@@ -228,47 +228,47 @@ export function Perfil() {
 
       <div className="space-y-6">
         {/* Card de Dados Cadastrais */}
-        <section className="card p-6">
-          <div className="mb-4 flex items-center justify-between border-b border-(--color-border) pb-4">
+        <section className="card p-7">
+          <div className="mb-5 flex items-center justify-between border-b border-(--color-border) pb-5">
             <div className="flex items-center gap-3">
-              <div className="grid h-12 w-12 place-items-center rounded-full bg-(--color-cyan-soft) font-display text-lg font-bold text-(--color-cyan)">
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-(--color-cyan-soft) font-display text-lg font-bold text-(--color-cyan)">
                 {perfil?.nome ? perfil.nome.charAt(0).toUpperCase() : 'U'}
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-(--color-ink)">{perfil?.nome ?? '—'}</h2>
-                <span className="inline-block rounded-full bg-(--color-green-soft) px-2.5 py-0.5 font-mono text-xs text-(--color-green)">
+                <span className="inline-block rounded-full bg-(--color-green-soft) px-2.5 py-0.5 text-xs font-semibold text-(--color-green)">
                   Conta Ativa
                 </span>
               </div>
             </div>
-            <span className="rounded-md border border-(--color-border) px-3 py-1 font-mono text-xs text-(--color-ink-soft)">
+            <span className="rounded-full border border-(--color-border) px-3 py-1 text-xs font-semibold text-(--color-ink-soft)">
               {role === 'admin' ? 'Administrador' : 'Aluno / Pesquisador'}
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <p className="font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">E-mail</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">E-mail</p>
               <p className="font-medium text-(--color-ink)">{perfil?.email ?? '—'}</p>
             </div>
 
             {role === 'aluno' && usuario && (
               <div>
-                <p className="font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">Matrícula</p>
-                <p className="font-mono font-medium text-(--color-ink)">{usuario.matricula ?? 'Não informada'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">Matrícula</p>
+                <p className="font-medium text-(--color-ink)">{usuario.matricula ?? 'Não informada'}</p>
               </div>
             )}
 
             {role === 'admin' && admin && (
               <div>
-                <p className="font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">Código de Admin</p>
-                <p className="font-mono font-medium text-(--color-ink)">{admin.codigo ?? '—'}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">Código de Admin</p>
+                <p className="font-medium text-(--color-ink)">{admin.codigo ?? '—'}</p>
               </div>
             )}
 
             <div>
-              <p className="font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">Identificador (ID)</p>
-              <p className="font-mono font-medium text-(--color-ink)">
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">Identificador (ID)</p>
+              <p className="font-medium text-(--color-ink)">
                 #{meuIdUsuario ?? meuIdAdm ?? '—'}
               </p>
             </div>
@@ -276,7 +276,7 @@ export function Perfil() {
         </section>
 
         {/* Zona de Perigo / Exclusão de Conta */}
-        <section className="rounded-xl border border-(--color-coral)/40 bg-(--color-coral-soft)/10 p-6">
+        <section className="rounded-2xl border border-(--color-coral)/30 bg-(--color-coral-soft)/20 p-7">
           <div className="mb-3 flex items-center gap-2 text-(--color-coral)">
             <svg
               className="h-5 w-5"
@@ -296,7 +296,7 @@ export function Perfil() {
           </div>
 
           <p className="text-sm text-(--color-ink)">
-            Caso você não queira mais utilizar a plataforma AgendaLab, você tem a opção de excluir
+            Caso você não queira mais utilizar a plataforma ReservaAI, você tem a opção de excluir
             sua conta definitivamente e solicitar a remoção/anonimização de seus dados pessoais.
           </p>
 

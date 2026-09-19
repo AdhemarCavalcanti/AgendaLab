@@ -144,20 +144,24 @@ export function MinhasReservas() {
   const agora = new Date()
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
-      <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">gestão de reservas</p>
-      <h1 className="mb-6 font-display text-3xl font-bold">Minhas reservas</h1>
+    <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+      <p className="kicker">gestão de reservas</p>
+      <h1 className="mb-2 font-display text-4xl font-extrabold tracking-tight">Minhas reservas</h1>
+      {localStorage.getItem('agendalab_plano') !== 'premium' && (
+        <p className="mb-6 text-sm text-(--color-ink-soft)">
+          Plano gratuito: até 2 salas reservadas por vez e 50 reservas no mês.{' '}
+          <a href="/planos" className="font-medium text-(--color-cyan) hover:underline">
+            Ver planos
+          </a>
+        </p>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2">
         {FILTROS.map((f) => (
           <button
             key={f.value}
             onClick={() => setFiltro(f.value)}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              filtro === f.value
-                ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+            className={`chip ${filtro === f.value ? 'chip-on' : ''}`}
           >
             {f.label}
           </button>
@@ -165,9 +169,9 @@ export function MinhasReservas() {
       </div>
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando…</p>
       ) : filtrados.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">
+        <p className="empty">
           Nenhuma reserva encontrada para esse filtro.
         </p>
       ) : (
@@ -176,14 +180,14 @@ export function MinhasReservas() {
             const futura = new Date(item.inicio) > agora
             const podeCancelar = futura && (item.status === 'pendente' || item.status === 'aprovada')
             return (
-              <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-3 p-4">
+              <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-3 p-5">
                 <div>
                   <div className="mb-1 flex items-center gap-2">
-                    <span className="font-mono text-[11px] uppercase tracking-wide text-(--color-ink-soft)">{item.tipo}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">{item.tipo}</span>
                     <StatusBadge status={item.canceladaPorAdministracao ? 'cancelada_administracao' : item.status} />
                   </div>
-                  <p className="font-medium">{item.recursoNome}</p>
-                  <p className="font-mono text-sm text-(--color-ink-soft)">
+                  <p className="font-semibold">{item.recursoNome}</p>
+                  <p className="text-sm text-(--color-ink-soft)">
                     {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {item.extra && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.extra}</p>}
@@ -196,7 +200,7 @@ export function MinhasReservas() {
                     </p>
                   )}
                   {item.justificativaCancelamento && (
-                    <p className="mt-2 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
+                    <p className="alert-error mt-2">
                       Justificativa da Administração: {item.justificativaCancelamento}
                     </p>
                   )}

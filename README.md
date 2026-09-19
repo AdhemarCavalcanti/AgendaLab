@@ -1,4 +1,4 @@
-# AgendaLab — Frontend (React + Supabase)
+# ReserveAi — Frontend (React + Supabase)
 
 MVP do sistema de reserva de laboratórios e equipamentos compartilhados, implementado **apenas no front-end**, consumindo diretamente o Supabase (Auth + Postgres + RLS) do projeto `gmtvpqcknqkqtzvdfyco`.
 
@@ -89,7 +89,7 @@ React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/su
 
 ## Modelo de Dados (DER)
 
-Este diagrama representa o modelo de dados e relacionamentos do banco de dados (Supabase/PostgreSQL) para o AgendaLab:
+Este diagrama representa o modelo de dados e relacionamentos do banco de dados (Supabase/PostgreSQL) para o ReserveAi:
 
 ```mermaid
 erDiagram

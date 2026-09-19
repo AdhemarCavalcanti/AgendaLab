@@ -89,10 +89,37 @@ describe('Login Page', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Entrar no AgendaLab')).toBeInTheDocument()
+    expect(screen.getByText('Entrar no ReservaAI')).toBeInTheDocument()
     const submitBtn = container.querySelector('button[type="submit"]')
     expect(submitBtn).toBeInTheDocument()
     expect(submitBtn?.textContent).toBe('entrar')
+  })
+
+  it('redireciona para a tela principal se o usuário já estiver autenticado', async () => {
+    vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
+      session: { user: { id: 'uuid-aluno-1' } } as any,
+      user: { id: 'uuid-aluno-1' } as any,
+      role: 'aluno',
+      perfil: { id_usuario: 1, nome: 'Aluno Teste' } as any,
+      meuIdUsuario: 1,
+      meuIdAdm: null,
+      loading: false,
+      signIn: mockSignIn,
+      ativarCadastroUsuario: mockAtivarAluno,
+      ativarCadastroAdmin: mockAtivarAdmin,
+      signOut: vi.fn(),
+      refreshPerfil: vi.fn(),
+    })
+
+    render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true })
+    })
   })
 
   it('permite submeter login com e-mail e senha e redireciona', async () => {

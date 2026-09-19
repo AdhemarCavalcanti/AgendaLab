@@ -18,21 +18,21 @@ export function AdminPlanos() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
-      <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">Gestão de Assinatura</p>
-      <h1 className="mb-8 font-display text-3xl font-bold">Planos e Limites</h1>
+    <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
+      <p className="kicker">Gestão de Assinatura</p>
+      <h1 className="mb-8 font-display text-4xl font-extrabold tracking-tight">Planos e Limites</h1>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Plano Grátis */}
-        <div className={`card p-6 flex flex-col ${!isPremium ? 'border-(--color-cyan) ring-1 ring-(--color-cyan)' : 'opacity-70'}`}>
-          <div className="mb-4 border-b border-(--color-border) pb-4">
-            <h2 className="font-display text-2xl font-bold">Grátis</h2>
-            <p className="text-3xl font-bold mt-2">R$ 0</p>
-            <p className="text-sm text-(--color-ink-soft) mt-1">Validação / Pequenos espaços</p>
+        <div className={`card flex flex-col p-7 ${!isPremium ? 'ring-2 ring-(--color-cyan)' : 'opacity-70'}`}>
+          <div className="mb-5 border-b border-(--color-border) pb-5">
+            <h2 className="font-display text-2xl font-bold tracking-tight">Grátis</h2>
+            <p className="mt-2 text-4xl font-extrabold tracking-tight">R$ 0</p>
+            <p className="mt-1 text-sm text-(--color-ink-soft)">Validação / Pequenos espaços</p>
           </div>
-          <ul className="flex-1 space-y-3 text-sm text-(--color-ink) mb-6">
-            <li>✓ Até 2 salas cadastradas</li>
-            <li>✓ Limite de 50 reservas mensais</li>
+          <ul className="mb-6 flex-1 space-y-3 text-sm text-(--color-ink)">
+            <li>✓ Até 2 salas reservadas por usuário</li>
+            <li>✓ Limite de 50 reservas mensais por usuário</li>
             <li>✓ 1 conta de administrador</li>
             <li className="text-(--color-ink-soft) line-through">Relatórios avançados de ocupação</li>
           </ul>
@@ -44,14 +44,15 @@ export function AdminPlanos() {
         </div>
 
         {/* Plano Premium */}
-        <div className={`card p-6 flex flex-col bg-(--color-cyan-soft)/30 ${isPremium ? 'border-(--color-cyan) ring-1 ring-(--color-cyan)' : ''}`}>
-          <div className="mb-4 border-b border-(--color-border) pb-4">
-            <h2 className="font-display text-2xl font-bold text-(--color-cyan)">Premium</h2>
-            <p className="text-3xl font-bold mt-2">R$ 19,90<span className="text-base font-normal text-(--color-ink-soft)">/mês</span></p>
-            <p className="text-sm text-(--color-ink-soft) mt-1">Instituições e Escolas</p>
+        <div className={`card flex flex-col p-7 ${isPremium ? 'ring-2 ring-(--color-accent)' : ''}`}>
+          <div className="mb-5 border-b border-(--color-border) pb-5">
+            <p className="mb-2 inline-flex rounded-full bg-(--color-accent-soft) px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-green)">Recomendado</p>
+            <h2 className="font-display text-2xl font-bold tracking-tight text-(--color-cyan)">Premium</h2>
+            <p className="mt-2 text-4xl font-extrabold tracking-tight">R$ 19,90<span className="text-base font-medium text-(--color-ink-soft)">/mês</span></p>
+            <p className="mt-1 text-sm text-(--color-ink-soft)">Equipes e empresas</p>
           </div>
-          <ul className="flex-1 space-y-3 text-sm text-(--color-ink) mb-6 font-medium">
-            <li>✓ Salas e reservas ilimitadas</li>
+          <ul className="mb-6 flex-1 space-y-3 text-sm font-medium text-(--color-ink)">
+            <li>✓ Salas e reservas ilimitadas para usuários</li>
             <li>✓ Equipamentos ilimitados</li>
             <li>✓ Relatórios avançados de ocupação (CSV)</li>
             <li>✓ Gestão de múltiplos administradores</li>
@@ -59,7 +60,7 @@ export function AdminPlanos() {
           {isPremium ? (
             <button disabled className="btn-primary w-full cursor-default opacity-100">Plano Atual (Ativo)</button>
           ) : (
-            <button onClick={assinarPremium} className="btn-primary w-full shadow-md animate-pulse">Fazer Upgrade por R$ 19,90</button>
+            <button onClick={assinarPremium} className="btn-primary w-full">Fazer Upgrade por R$ 19,90</button>
           )}
         </div>
       </div>

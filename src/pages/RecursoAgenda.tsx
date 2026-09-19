@@ -29,6 +29,43 @@ const MSG_CONFLITO_CONCORRENCIA =
   'Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período.'
 
 const MSG_MANUTENCAO = 'Este recurso está em manutenção no período selecionado. Escolha outro horário.'
+const LIMITE_SALAS_ATIVAS_GRATIS = 2
+const LIMITE_RESERVAS_MENSAIS_GRATIS = 50
+
+function planoEhPremium() {
+  return localStorage.getItem('agendalab_plano') === 'premium'
+}
+
+async function obterUsoReservasUsuario(idUsuario: number) {
+  const agoraISO = new Date().toISOString()
+  const inicioMes = new Date()
+  inicioMes.setDate(1)
+  inicioMes.setHours(0, 0, 0, 0)
+
+  const [salasAtivas, salasMes, equipMes] = await Promise.all([
+    supabase
+      .from('reservas_salas')
+      .select('id')
+      .eq('id_usuario', idUsuario)
+      .in('status', ['pendente', 'aprovada'])
+      .gte('fim', agoraISO),
+    supabase
+      .from('reservas_salas')
+      .select('id')
+      .eq('id_usuario', idUsuario)
+      .gte('inicio', inicioMes.toISOString()),
+    supabase
+      .from('reservas_equipamentos')
+      .select('id')
+      .eq('id_usuario', idUsuario)
+      .gte('inicio', inicioMes.toISOString()),
+  ])
+
+  return {
+    salasAtivas: (salasAtivas.data ?? []).length,
+    reservasNoMes: (salasMes.data ?? []).length + (equipMes.data ?? []).length,
+  }
+}
 
 const MSG_CONFLITO_ACESSORIO =
   'A sala ou um dos acessórios selecionados não está mais disponível. Revise o período e as quantidades.'
@@ -84,6 +121,7 @@ export function RecursoAgenda() {
   const [carregandoAcessorios, setCarregandoAcessorios] = useState(false)
   const [erroAcessorios, setErroAcessorios] = useState<string | null>(null)
   const carregamentoAcessoriosId = useRef(0)
+  const [avisoLimiteUsuario, setAvisoLimiteUsuario] = useState<string | null>(null)
 
   const dias = useMemo(() => proximosDias(14), [])
   const tabela = tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
@@ -231,6 +269,29 @@ export function RecursoAgenda() {
   }, [tipo, id])
 
   useEffect(() => {
+    if (role !== 'aluno' || !meuIdUsuario || planoEhPremium()) {
+      setAvisoLimiteUsuario(null)
+      return
+    }
+
+    obterUsoReservasUsuario(meuIdUsuario).then((uso) => {
+      if (uso.reservasNoMes >= LIMITE_RESERVAS_MENSAIS_GRATIS) {
+        setAvisoLimiteUsuario(
+          `Limite de ${LIMITE_RESERVAS_MENSAIS_GRATIS} reservas mensais do plano gratuito atingido.`
+        )
+        return
+      }
+      if (tipo === 'sala' && uso.salasAtivas >= LIMITE_SALAS_ATIVAS_GRATIS) {
+        setAvisoLimiteUsuario(
+          `Limite de ${LIMITE_SALAS_ATIVAS_GRATIS} salas reservadas do plano gratuito atingido. Cancele uma reserva ou faça upgrade.`
+        )
+        return
+      }
+      setAvisoLimiteUsuario(null)
+    })
+  }, [role, meuIdUsuario, tipo])
+
+  useEffect(() => {
     carregarOcupacoes()
 
     if (!tipo || !id) return
@@ -360,6 +421,20 @@ export function RecursoAgenda() {
     if (acessorioInvalido) {
       setFormErro('Revise as quantidades dos acessórios selecionados.')
       return
+    }
+
+    if (role === 'aluno' && !planoEhPremium()) {
+      const uso = await obterUsoReservasUsuario(meuIdUsuario)
+      if (uso.reservasNoMes >= LIMITE_RESERVAS_MENSAIS_GRATIS) {
+        setFormErro(`Limite de ${LIMITE_RESERVAS_MENSAIS_GRATIS} reservas mensais do plano gratuito atingido.`)
+        return
+      }
+      if (tipo === 'sala' && uso.salasAtivas >= LIMITE_SALAS_ATIVAS_GRATIS) {
+        setFormErro(
+          `Limite de ${LIMITE_SALAS_ATIVAS_GRATIS} salas reservadas do plano gratuito atingido. Cancele uma reserva ou faça upgrade.`
+        )
+        return
+      }
     }
 
     setEnviando(true)
@@ -550,7 +625,7 @@ export function RecursoAgenda() {
     if (acessoriosPayload.length > 0) await carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
   }
 
-  if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+  if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 text-sm text-(--color-ink-soft)">carregando…</p>
   if (erro || !recurso) return <p className="mx-auto max-w-6xl px-4 py-10 text-(--color-coral)">{erro}</p>
 
   const nome = recurso.nome
@@ -567,24 +642,24 @@ export function RecursoAgenda() {
     }))
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
       <button onClick={() => navigate(-1)} className="mb-6 text-sm text-(--color-ink-soft) hover:text-(--color-cyan)">
         ← voltar ao catálogo
       </button>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">{tipo}</p>
-          <h1 className="font-display text-3xl font-bold">{nome}</h1>
+          <p className="kicker">{tipo}</p>
+          <h1 className="font-display text-4xl font-extrabold tracking-tight">{nome}</h1>
           <p className="mt-1 text-(--color-ink-soft)">{detalhe}</p>
         </div>
         <StatusBadge status={statusAtual} tipo="recurso" />
       </div>
 
       {recurso.regras_uso && (
-        <div className="mb-8 rounded-lg border border-(--color-border) bg-black/5 p-4">
-          <h3 className="mb-1 font-mono text-xs font-semibold uppercase tracking-wider text-(--color-cyan)">
-            📋 Regras de Uso
+        <div className="card mb-8 p-5">
+          <h3 className="kicker">
+            Regras de Uso
           </h3>
           <p className="text-sm whitespace-pre-line text-(--color-ink-soft)">
             {recurso.regras_uso}
@@ -593,19 +668,19 @@ export function RecursoAgenda() {
       )}
 
       {indisponivel ? (
-        <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-4 text-sm text-(--color-coral)">
+        <p className="alert-error">
           {equipamentoSemEstoque
             ? 'Este recurso está em manutenção e não pode ser reservado no momento.'
             : STATUS_MSG[recurso.status] ?? 'Este recurso não está disponível para reservas no momento.'}
         </p>
       ) : !user ? (
-        <p className="rounded-md border border-(--color-border) bg-(--color-surface) p-4 text-sm text-(--color-ink-soft)">
+        <p className="card p-5 text-sm text-(--color-ink-soft)">
           <a href="/login" className="font-medium text-(--color-cyan) hover:underline">Entre na sua conta</a> para solicitar uma reserva.
         </p>
       ) : (
         <>
           {role === 'admin' && (
-            <div className="mb-4 rounded-md border border-(--color-cyan)/30 bg-(--color-cyan-soft) p-3 text-xs text-(--color-cyan)">
+            <div className="alert-info mb-4 text-xs">
               Modo de visualização administrativa. Apenas alunos/pesquisadores podem realizar solicitações de reserva.
             </div>
           )}
@@ -617,8 +692,8 @@ export function RecursoAgenda() {
                 <button
                   key={d.toISOString()}
                   onClick={() => setSelectedDate(d)}
-                  className={`shrink-0 rounded-md border px-3 py-2 text-center font-mono text-xs transition-colors ${
-                    ativo ? 'border-(--color-cyan) bg-(--color-cyan) text-white' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
+                  className={`shrink-0 rounded-2xl border px-3.5 py-2.5 text-center text-xs transition-colors ${
+                    ativo ? 'border-transparent bg-(--color-cyan) text-white' : 'border-(--color-border) bg-white text-(--color-ink-soft) hover:bg-black/5'
                   }`}
                 >
                   <div className="uppercase">{d.toLocaleDateString('pt-BR', { weekday: 'short' })}</div>
@@ -628,12 +703,21 @@ export function RecursoAgenda() {
             })}
           </div>
 
+          {avisoLimiteUsuario && role === 'aluno' && (
+            <p className="alert-error mb-4">
+              {avisoLimiteUsuario}{' '}
+              <a href="/planos" className="font-semibold underline">
+                Ver planos
+              </a>
+            </p>
+          )}
+
           <AvailabilityGrid
             date={selectedDate}
             ocupacoes={ocupacoes}
             totalEstoque={tipo === 'equipamento' ? (recurso as Equipamento).quantidade : 1}
             isEquipamento={tipo === 'equipamento'}
-            onConfirmSelection={role === 'aluno' ? abrirConfirmacao : undefined}
+            onConfirmSelection={role === 'aluno' && !avisoLimiteUsuario ? abrirConfirmacao : undefined}
           />
         </>
       )}

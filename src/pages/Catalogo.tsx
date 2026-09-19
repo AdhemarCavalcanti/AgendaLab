@@ -18,7 +18,7 @@ function StatusBadge({ status }: { status: string; tipo?: string }) {
   }
 
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs capitalize ${estilos}`}>
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${estilos}`}>
       {status}
     </span>
   )
@@ -102,15 +102,15 @@ export function Catalogo() {
   }, [salas, equipamentos, tipo, statusFiltro, busca])
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-8">
       <div className="mb-8">
-        <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">catálogo de recursos</p>
-        <h1 className="font-display text-3xl font-bold">Salas e equipamentos disponíveis</h1>
-        <p className="mt-1 text-(--color-ink-soft)">Filtre por tipo, status e busque por nome em tempo real.</p>
+        <p className="kicker">catálogo de recursos</p>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight">Salas e equipamentos disponíveis</h1>
+        <p className="mt-2 max-w-2xl text-(--color-ink-soft)">Filtre por tipo, status e busque por nome em tempo real.</p>
       </div>
 
       {/* Painel de Filtros */}
-      <div className="mb-8 rounded-xl border border-(--color-border) bg-black/5 p-4 md:p-5">
+      <div className="card mb-8 p-4 md:p-5">
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative w-full sm:max-w-md">
@@ -145,7 +145,7 @@ export function Catalogo() {
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">
                 Tipo de Recurso
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -157,11 +157,7 @@ export function Catalogo() {
                   <button
                     key={t.value}
                     onClick={() => setTipo(t.value as 'todos' | TipoRecurso)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                      tipo === t.value
-                        ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) shadow-xs'
-                        : 'border-(--color-border) bg-white text-(--color-ink-soft) hover:bg-black/5'
-                    }`}
+                    className={`chip ${tipo === t.value ? 'chip-on' : ''}`}
                   >
                     {t.label}
                   </button>
@@ -170,7 +166,7 @@ export function Catalogo() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-(--color-ink-soft)">
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">
                 Status de Disponibilidade
               </span>
               <div className="flex flex-wrap gap-1.5">
@@ -183,11 +179,7 @@ export function Catalogo() {
                   <button
                     key={s.value}
                     onClick={() => setStatusFiltro(s.value)}
-                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                      statusFiltro === s.value
-                        ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan) shadow-xs'
-                        : 'border-(--color-border) bg-white text-(--color-ink-soft) hover:bg-black/5'
-                    }`}
+                    className={`chip ${statusFiltro === s.value ? 'chip-on' : ''}`}
                   >
                     {s.label}
                   </button>
@@ -199,16 +191,16 @@ export function Catalogo() {
       </div>
 
       {erro && (
-        <p className="mb-6 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
+        <p className="alert-error mb-6">
           {erro}
         </p>
       )}
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando recursos…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando recursos…</p>
       ) : recursos.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-(--color-border) p-10 text-center">
-          <p className="text-(--color-ink-soft)">Nenhum recurso encontrado com os filtros aplicados.</p>
+        <div className="empty">
+          <p>Nenhum recurso encontrado com os filtros aplicados.</p>
           {temFiltroAtivo && (
             <button
               onClick={limparFiltros}
@@ -224,17 +216,17 @@ export function Catalogo() {
             <Link
               key={`${r.tipo}-${r.id}`}
               to={`/recurso/${r.tipo}/${r.id}`}
-              className="reg-mark group card overflow-hidden transition-shadow hover:shadow-md"
+              className="group card overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_color-mix(in_srgb,#0B1220_8%,transparent)]"
             >
-              <div className="flex h-28 items-center justify-center bg-(--color-cyan-soft)">
-                <span className="font-mono text-4xl text-(--color-cyan)/40">{r.tipo === 'sala' ? '▭' : '⚙'}</span>
+              <div className={`flex h-28 items-center justify-center ${r.tipo === 'sala' ? 'bg-(--color-cyan-soft)' : 'bg-(--color-accent-soft)'}`}>
+                <span className={`text-4xl ${r.tipo === 'sala' ? 'text-(--color-cyan)/35' : 'text-(--color-accent)'}`}>{r.tipo === 'sala' ? '▭' : '⚙'}</span>
               </div>
-              <div className="p-4">
+              <div className="p-5">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="font-display font-semibold leading-tight group-hover:text-(--color-cyan)">{r.nome}</h3>
                   <StatusBadge status={r.status} tipo="recurso" />
                 </div>
-                <p className="font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">{r.tipo}</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">{r.tipo}</p>
                 <p className="mt-1 text-sm text-(--color-ink-soft)">{r.detalhe}</p>
               </div>
             </Link>
