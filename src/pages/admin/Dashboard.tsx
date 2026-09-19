@@ -109,14 +109,14 @@ export function AdminDashboard() {
     document.body.removeChild(link)
   }
 
-  if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 font-mono text-sm text-(--color-ink-soft)">carregando métricas…</p>
+  if (loading) return <p className="mx-auto max-w-6xl px-4 py-10 text-sm text-(--color-ink-soft)">carregando métricas…</p>
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
-      <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-8">
+      <p className="kicker">painel administrativo</p>
       
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="font-display text-3xl font-bold">Dashboard &amp; métricas</h1>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight">Dashboard &amp; métricas</h1>
         
         <div className="flex flex-col items-end gap-1">
           <button 
@@ -128,7 +128,7 @@ export function AdminDashboard() {
           </button>
           {!isPremium && (
             <span className="text-[10px] text-(--color-amber) font-medium">
-              Recurso Premium. <a href="/admin/planos" className="underline">Fazer upgrade</a>.
+              Recurso Premium. <a href="/planos" className="underline">Fazer upgrade</a>.
             </span>
           )}
         </div>
@@ -147,11 +147,11 @@ export function AdminDashboard() {
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={porSemana}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#DCE7E6" />
-              <XAxis dataKey="semana" tick={{ fontSize: 12, fontFamily: 'IBM Plex Mono' }} stroke="#48586B" />
-              <YAxis allowDecimals={false} tick={{ fontSize: 12, fontFamily: 'IBM Plex Mono' }} stroke="#48586B" />
-              <Tooltip contentStyle={{ fontFamily: 'IBM Plex Mono', fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="total" fill="#0E7C86" radius={[4, 4, 0, 0]} />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E6E0D4" />
+              <XAxis dataKey="semana" tick={{ fontSize: 12, fontFamily: 'Plus Jakarta Sans' }} stroke="#6B635C" />
+              <YAxis allowDecimals={false} tick={{ fontSize: 12, fontFamily: 'Plus Jakarta Sans' }} stroke="#6B635C" />
+              <Tooltip contentStyle={{ fontFamily: 'Plus Jakarta Sans', fontSize: 12, borderRadius: 12, border: '1px solid #E6E0D4' }} />
+              <Bar dataKey="total" fill="#4A1F2D" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -167,11 +167,11 @@ export function AdminDashboard() {
             {ocupacaoPorRecurso.map((r) => (
               <div key={`${r.tipo}-${r.nome}`}>
                 <div className="mb-1 flex justify-between text-sm">
-                  <span className="font-medium">{r.nome} <span className="font-mono text-xs text-(--color-ink-soft)">· {r.tipo}</span></span>
-                  <span className="font-mono text-(--color-ink-soft)">{r.pct}%</span>
+                  <span className="font-medium">{r.nome} <span className="text-xs text-(--color-ink-soft)">· {r.tipo}</span></span>
+                  <span className="text-(--color-ink-soft)">{r.pct}%</span>
                 </div>
                 <div className="h-2 w-full overflow-hidden rounded-full bg-(--color-paper)">
-                  <div className="h-full rounded-full bg-(--color-cyan)" style={{ width: `${r.pct}%` }} />
+                  <div className="h-full rounded-full bg-(--color-accent)" style={{ width: `${r.pct}%` }} />
                 </div>
               </div>
             ))}
@@ -184,9 +184,9 @@ export function AdminDashboard() {
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent?: 'amber' }) {
   return (
-    <div className="reg-mark card p-4">
-      <p className={`font-display text-3xl font-bold ${accent === 'amber' ? 'text-(--color-amber)' : 'text-(--color-cyan)'}`}>{value}</p>
-      <p className="mt-1 font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">{label}</p>
+    <div className="card p-5">
+      <p className={`font-display text-3xl font-extrabold tracking-tight ${accent === 'amber' ? 'text-(--color-amber)' : 'text-(--color-cyan)'}`}>{value}</p>
+      <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">{label}</p>
     </div>
   )
 }

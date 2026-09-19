@@ -182,13 +182,13 @@ export function AdminReservas() {
   }  
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
-      <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">
+    <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
+      <p className="kicker">
         {role === 'admin' ? 'painel administrativo' : 'minhas reservas'}
       </p>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-      <h1 className="mb-6 font-display text-3xl font-bold">
+      <h1 className="font-display text-4xl font-extrabold tracking-tight">
         {role === 'admin' ? 'Todas as reservas' : 'Histórico de reservas'}
       </h1>
 
@@ -206,11 +206,7 @@ export function AdminReservas() {
           <button
             key={f.value}
             onClick={() => setFiltroStatus(f.value)}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-              filtroStatus === f.value
-                ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+            className={`chip ${filtroStatus === f.value ? 'chip-on' : ''}`}
           >
             {f.label}
           </button>
@@ -220,11 +216,7 @@ export function AdminReservas() {
           <button
             key={t}
             onClick={() => setFiltroTipo(t)}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium capitalize transition-colors ${
-              filtroTipo === t
-                ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+            className={`chip capitalize ${filtroTipo === t ? 'chip-on' : ''}`}
           >
             {t === 'todos' ? 'todos os tipos' : t === 'sala' ? 'salas' : 'equipamentos'}
           </button>
@@ -232,28 +224,28 @@ export function AdminReservas() {
       </div>
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando…</p>
       ) : filtrados.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">
+        <p className="empty">
           Nenhuma reserva encontrada para esse filtro.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-(--color-border)">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-(--color-paper) font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">
+        <div className="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <th className="px-4 py-3">Recurso</th>
-                {role === 'admin' && <th className="px-4 py-3">Solicitante</th>}
-                <th className="px-4 py-3">Período</th>
-                <th className="px-4 py-3">Status</th>
+                <th>Recurso</th>
+                {role === 'admin' && <th>Solicitante</th>}
+                <th>Período</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
               {filtrados.map((item) => (
-                <tr key={`${item.tipo}-${item.id}`} className="border-t border-(--color-border) align-top">
-                  <td className="px-4 py-3">
+                <tr key={`${item.tipo}-${item.id}`} className="align-top">
+                  <td>
                     <p className="font-medium">{item.recursoNome}</p>
-                    <p className="font-mono text-xs uppercase text-(--color-ink-soft)">{item.tipo}</p>
+                    <p className="text-xs uppercase tracking-[0.12em] text-(--color-ink-soft)">{item.tipo}</p>
                     {item.detalhe && <p className="mt-1 text-xs text-(--color-ink-soft)">{item.detalhe}</p>}
                     {item.justificativaCancelamento && (
                       <p className="mt-1 text-xs text-(--color-coral)">
@@ -261,14 +253,14 @@ export function AdminReservas() {
                       </p>
                     )}
                   </td>
-                  {role === 'admin' && <td className="px-4 py-3">{item.usuarioNome}</td>}
-                  <td className="px-4 py-3 font-mono text-xs">
+                  {role === 'admin' && <td>{item.usuarioNome}</td>}
+                  <td className="text-xs">
                     {new Date(item.inicio).toLocaleDateString('pt-BR')}
                     <br />
                     {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} –{' '}
                     {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="px-4 py-3">
+                  <td>
                     <StatusBadge status={item.canceladaPorAdministracao ? 'cancelada_administracao' : item.status} />
                   </td>
                 </tr>

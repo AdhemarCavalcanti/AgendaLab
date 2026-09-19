@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { Navbar } from './components/Navbar'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -24,6 +24,8 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Catalogo />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/planos" element={<AdminPlanos />} />
+              <Route path="/admin/planos" element={<Navigate to="/planos" replace />} />
               <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
               <Route
                 path="/perfil"
@@ -81,18 +83,10 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/admin/planos"
-                element={
-                  <ProtectedRoute allow={['admin']}>
-                    <AdminPlanos />
-                  </ProtectedRoute>
-                }
-              />
             </Routes>
           </main>
-          <footer className="border-t border-(--color-border) py-6 text-center font-mono text-xs text-(--color-ink-soft)">
-            AgendaLab · MVP · React + Supabase
+          <footer className="border-t border-(--color-border)/80 py-7 text-center text-xs text-(--color-ink-soft)">
+            ReservaAI · reservas corporativas de salas, equipamentos e objetos
           </footer>
         </div>
       </AuthProvider>

@@ -85,11 +85,11 @@ export function AdminGestaoUsuarios() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
-          <h1 className="font-display text-3xl font-bold">Gestão de usuários</h1>
+          <p className="kicker">painel administrativo</p>
+          <h1 className="font-display text-4xl font-extrabold tracking-tight">Gestão de usuários</h1>
         </div>
         
         <div className="flex flex-col items-end gap-1">
@@ -103,7 +103,7 @@ export function AdminGestaoUsuarios() {
           
           {limiteAdminsAtingido && (
             <span className="text-[10px] text-(--color-amber) font-medium max-w-[200px] text-right leading-tight">
-              Múltiplos administradores é um recurso Premium. <a href="/admin/planos" className="underline">Fazer upgrade</a>.
+              Múltiplos administradores é um recurso Premium. <a href="/planos" className="underline">Fazer upgrade</a>.
             </span>
           )}
         </div>
@@ -115,11 +115,7 @@ export function AdminGestaoUsuarios() {
             <button
               key={t}
               onClick={() => setAba(t)}
-              className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                aba === t
-                  ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-                  : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-              }`}
+              className={`chip capitalize ${aba === t ? 'chip-on' : ''}`}
             >
               {t === 'usuarios' ? 'alunos/pesquisadores' : 'administradores'}
             </button>
@@ -147,10 +143,10 @@ export function AdminGestaoUsuarios() {
         </div>
       </div>
 
-      {erro && <p className="mb-4 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">{erro}</p>}
+      {erro && <p className="alert-error mb-4">{erro}</p>}
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando…</p>
       ) : (
         <div className="space-y-8">
           {/* Seção de Pendentes */}
@@ -160,7 +156,7 @@ export function AdminGestaoUsuarios() {
             </h2>
             {aba === 'usuarios' ? (
               pendentesUsuarios.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
+                <p className="empty text-sm">
                   {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhum pré-cadastro de aluno pendente.'}
                 </p>
               ) : (
@@ -187,7 +183,7 @@ export function AdminGestaoUsuarios() {
                 </div>
               )
             ) : pendentesAdmins.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
+              <p className="empty text-sm">
                 {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhum pré-cadastro de administrador pendente.'}
               </p>
             ) : (
@@ -221,18 +217,18 @@ export function AdminGestaoUsuarios() {
               Contas ativas {aba === 'usuarios' ? `(${ativadosUsuarios.length})` : `(${ativadosAdmins.length})`}
             </h2>
             {(aba === 'usuarios' ? ativadosUsuarios : ativadosAdmins).length === 0 ? (
-              <p className="rounded-lg border border-dashed border-(--color-border) p-6 text-center text-sm text-(--color-ink-soft)">
+              <p className="empty text-sm">
                 {busca ? 'Nenhum resultado encontrado para a busca.' : 'Nenhuma conta ativa ainda.'}
               </p>
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-(--color-border)">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-(--color-paper) font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">
+              <div className="table-wrap">
+                <table>
+                  <thead>
                     <tr>
-                      <th className="px-4 py-3">Nome</th>
-                      <th className="px-4 py-3">E-mail</th>
-                      <th className="px-4 py-3">{aba === 'usuarios' ? 'Matrícula' : 'Código'}</th>
-                      <th className="px-4 py-3 text-right">Ações</th>
+                      <th>Nome</th>
+                      <th>E-mail</th>
+                      <th>{aba === 'usuarios' ? 'Matrícula' : 'Código'}</th>
+                      <th className="text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>

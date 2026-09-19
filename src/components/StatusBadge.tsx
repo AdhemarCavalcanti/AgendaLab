@@ -18,7 +18,7 @@ export function StatusBadge({ status, tipo = 'reserva' }: { status: string; tipo
   const map = tipo === 'reserva' ? RESERVA_MAP : RECURSO_MAP
   const info = map[status] ?? { label: status, cls: 'bg-black/5 text-(--color-ink-soft) border-black/10' }
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-mono font-medium ${info.cls}`}>
+    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold ${info.cls}`}>
       <span className="h-1.5 w-1.5 rounded-full bg-current" />
       {info.label}
     </span>

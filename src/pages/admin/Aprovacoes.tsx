@@ -234,10 +234,10 @@ export function AdminAprovacoes() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 md:px-6">
-      <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
+    <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+      <p className="kicker">painel administrativo</p>
       <div className="mb-1 flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-3xl font-bold">Gestão de reservas</h1>
+        <h1 className="font-display text-4xl font-extrabold tracking-tight">Gestão de reservas</h1>
         {novaSolicitacao && (
           <button
             onClick={carregar}
@@ -252,38 +252,32 @@ export function AdminAprovacoes() {
       <div className="mb-6 mt-4 flex gap-2">
         <button
           onClick={() => setAba('pendentes')}
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${aba === 'pendentes'
-              ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-              : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+          className={`chip ${aba === 'pendentes' ? 'chip-on' : ''}`}
         >
           Fila de aprovações ({itens.length})
         </button>
         <button
           onClick={() => setAba('devolucao')}
-          className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${aba === 'devolucao'
-              ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)'
-              : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+          className={`chip ${aba === 'devolucao' ? 'chip-on' : ''}`}
         >
           Pedidos para devolução ({devolucoes.length})
         </button>
       </div>
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando…</p>
       ) : aba === 'pendentes' ? (
         itens.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">
+          <p className="empty">
             Nenhuma solicitação pendente. Tudo em dia! ✓
           </p>
         ) : (
           <div className="space-y-3">
             {itens.map((item) => (
-              <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-4">
+              <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-5">
                 <div>
                   <div className="mb-1 flex items-center gap-2">
-                    <span className="font-mono text-[11px] uppercase tracking-wide text-(--color-ink-soft)">{item.tipo}</span>
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">{item.tipo}</span>
                     <span className="rounded-full border border-(--color-amber)/30 bg-(--color-amber-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-amber)">pendente</span>
                   </div>
                   <p className="font-medium">{item.recursoNome} — solicitado por {item.usuarioNome}</p>
@@ -294,7 +288,7 @@ export function AdminAprovacoes() {
                     {item.usuarioEmail && <span>E-mail: {item.usuarioEmail}</span>}
                   </p>
 
-                  <p className="mt-1 font-mono text-sm text-(--color-ink-soft)">
+                  <p className="mt-1 text-sm text-(--color-ink-soft)">
                     {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                   </p>
                   {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
@@ -320,16 +314,16 @@ export function AdminAprovacoes() {
           </div>
         )
       ) : devolucoes.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">
+        <p className="empty">
           Nenhum equipamento em uso aguardando devolução.
         </p>
       ) : (
         <div className="space-y-3">
           {devolucoes.map((item) => (
-            <div key={`devolucao-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-4">
+            <div key={`devolucao-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-5">
               <div>
                 <div className="mb-1 flex items-center gap-2">
-                  <span className="font-mono text-[11px] uppercase tracking-wide text-(--color-ink-soft)">equipamento</span>
+                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">equipamento</span>
                   <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
                 </div>
                 <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
@@ -340,7 +334,7 @@ export function AdminAprovacoes() {
                   {item.usuarioEmail && <span>E-mail: {item.usuarioEmail}</span>}
                 </p>
 
-                <p className="mt-1 font-mono text-sm text-(--color-ink-soft)">
+                <p className="mt-1 text-sm text-(--color-ink-soft)">
                   {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </p>
                 {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}

@@ -160,7 +160,7 @@ export function NotificationBell() {
           setPiscar(false)
           navigate('/admin/aprovacoes')
         }}
-        className="relative rounded-md border border-(--color-border) p-2 text-(--color-ink-soft) transition-colors hover:bg-black/5"
+        className="relative rounded-xl border border-(--color-border) p-2 text-(--color-ink-soft) transition-colors hover:bg-black/5"
         title="Solicitações pendentes"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -169,7 +169,7 @@ export function NotificationBell() {
         </svg>
         {pendentes > 0 && (
           <span
-            className={`absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-(--color-coral) px-1 font-mono text-[10px] font-bold text-white ${
+            className={`absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-(--color-coral) px-1 text-[10px] font-bold text-white ${
               piscar ? 'animate-pulse' : ''
             }`}
           >
@@ -188,7 +188,7 @@ export function NotificationBell() {
           setIsOpen(!isOpen)
           setPiscar(false)
         }}
-        className="relative rounded-md border border-(--color-border) p-2 text-(--color-ink-soft) transition-colors hover:bg-black/5"
+        className="relative rounded-xl border border-(--color-border) p-2 text-(--color-ink-soft) transition-colors hover:bg-black/5"
         title="Seus avisos"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -197,7 +197,7 @@ export function NotificationBell() {
         </svg>
         {naoLidasCount > 0 && (
           <span
-            className={`absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-(--color-coral) px-1 font-mono text-[10px] font-bold text-white ${
+            className={`absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-(--color-coral) px-1 text-[10px] font-bold text-white ${
               piscar ? 'animate-pulse' : ''
             }`}
           >
@@ -207,10 +207,10 @@ export function NotificationBell() {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 max-h-[420px] z-50 flex flex-col rounded-lg border border-(--color-border) bg-(--color-surface) shadow-lg font-sans">
+        <div className="absolute right-0 z-50 mt-2 flex max-h-[420px] w-80 flex-col rounded-2xl border border-(--color-border) bg-(--color-surface) font-sans shadow-[0_20px_50px_color-mix(in_srgb,#0B1220_14%,transparent)]">
           {/* Cabeçalho do Dropdown */}
           <div className="flex items-center justify-between border-b border-(--color-border) p-3">
-            <h4 className="font-semibold text-sm text-(--color-ink) font-display">Avisos</h4>
+            <h4 className="font-display text-sm font-semibold text-(--color-ink)">Avisos</h4>
             {naoLidasCount > 0 && (
               <button
                 onClick={marcarTodasComoLidas}
@@ -224,7 +224,7 @@ export function NotificationBell() {
           {/* Lista de Notificações */}
           <div className="flex-1 overflow-y-auto scrollbar-thin max-h-80">
             {notificacoes.length === 0 ? (
-              <div className="p-4 text-center text-xs text-(--color-ink-soft) font-mono">
+              <div className="p-4 text-center text-xs text-(--color-ink-soft)">
                 Nenhum aviso no momento.
               </div>
             ) : (
@@ -239,7 +239,7 @@ export function NotificationBell() {
                     <span className={`font-semibold text-(--color-ink) ${!notif.lida ? 'text-(--color-cyan)' : ''}`}>
                       {notif.titulo}
                     </span>
-                    <span className="text-[10px] text-(--color-ink-soft) font-mono whitespace-nowrap">
+                    <span className="whitespace-nowrap text-[10px] text-(--color-ink-soft)">
                       {formatarData(notif.criado_em)}
                     </span>
                   </div>
