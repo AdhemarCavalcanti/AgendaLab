@@ -133,12 +133,12 @@ export function AvailabilityGrid({
   const max = selected.length ? Math.max(...selected) : null
 
   return (
-    <div className="reg-mark rounded-lg border border-(--color-border) bg-(--color-surface) p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <p className="font-mono text-xs uppercase tracking-wider text-(--color-ink-soft)">
+    <div className="card p-5">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">
           grade de disponibilidade · {date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'short' })}
         </p>
-        <div className="flex items-center gap-3 font-mono text-[11px] text-(--color-ink-soft)">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-(--color-ink-soft)">
           <Legend color="bg-white border border-dashed border-(--color-cyan)" label="livre" />
           <Legend color="bg-(--color-amber)" label="pendente" />
           <Legend color="bg-(--color-cyan)" label="aprovada" />
@@ -153,7 +153,7 @@ export function AvailabilityGrid({
           const podeSelecionar = !!onConfirmSelection && !disabled && st.kind === 'livre'
 
           let cls =
-            'flex items-center justify-between rounded-md border px-3 py-2 text-sm transition-colors font-mono select-none'
+            'flex items-center justify-between rounded-xl border px-3 py-2.5 text-sm transition-colors select-none'
           if (st.kind === 'passado') {
             cls += ' border-transparent bg-black/[0.03] text-(--color-ink-soft)/50 cursor-not-allowed'
           } else if (st.kind === 'manutencao') {
@@ -202,15 +202,15 @@ export function AvailabilityGrid({
       </div>
 
       {selected.length > 0 && min !== null && max !== null && onConfirmSelection && (
-        <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-md border border-(--color-cyan)/40 bg-(--color-cyan-soft) p-3 sm:flex-row sm:items-center">
-          <p className="font-mono text-sm text-(--color-cyan)">
+        <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-2xl bg-(--color-cyan-soft) p-3 sm:flex-row sm:items-center">
+          <p className="text-sm font-semibold text-(--color-cyan)">
             selecionado: {hourLabel(min)} → {hourLabel(max + 1)}
           </p>
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setSelected([])}
-              className="rounded-md border border-(--color-border) bg-white px-3 py-1.5 text-xs font-medium text-(--color-ink-soft) hover:bg-black/5"
+              className="rounded-xl border border-(--color-border) bg-white px-3 py-1.5 text-xs font-medium text-(--color-ink-soft) hover:bg-black/5"
             >
               limpar
             </button>
@@ -220,7 +220,7 @@ export function AvailabilityGrid({
                 onConfirmSelection(sameSlot(date, min), sameSlot(date, max + 1))
                 setSelected([])
               }}
-              className="rounded-md bg-(--color-cyan) px-4 py-1.5 text-xs font-semibold text-white hover:bg-(--color-cyan-bright)"
+              className="rounded-xl bg-(--color-cyan) px-4 py-1.5 text-xs font-semibold text-white hover:bg-(--color-cyan-bright)"
             >
               solicitar reserva →
             </button>

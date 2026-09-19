@@ -37,8 +37,9 @@ describe('Navbar Component', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('AgendaLab')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /ReservaAI/i })).toBeInTheDocument()
     expect(screen.getByText('catálogo')).toBeInTheDocument()
+    expect(screen.getByText('planos')).toBeInTheDocument()
     expect(screen.getByText(/entrar/i)).toBeInTheDocument()
     expect(screen.queryByText('minhas reservas')).not.toBeInTheDocument()
   })
@@ -66,7 +67,10 @@ describe('Navbar Component', () => {
     )
 
     expect(screen.getByText('minhas reservas')).toBeInTheDocument()
+    expect(screen.getByText('planos')).toBeInTheDocument()
     expect(screen.getByText('perfil')).toBeInTheDocument()
+    const alunoLinks = Array.from(document.querySelector('nav')!.querySelectorAll('a')).map((a) => a.textContent)
+    expect(alunoLinks.at(-1)).toBe('planos')
     expect(screen.getByTestId('notification-bell')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sair/i })).toBeInTheDocument()
   })
@@ -98,5 +102,8 @@ describe('Navbar Component', () => {
     expect(screen.getByText('todas as reservas')).toBeInTheDocument()
     expect(screen.getByText('usuários')).toBeInTheDocument()
     expect(screen.getByText('dashboard')).toBeInTheDocument()
+    expect(screen.getByText('planos')).toBeInTheDocument()
+    const adminLinks = Array.from(document.querySelector('nav')!.querySelectorAll('a')).map((a) => a.textContent)
+    expect(adminLinks.at(-1)).toBe('planos')
   })
 })

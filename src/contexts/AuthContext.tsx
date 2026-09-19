@@ -94,14 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession)
-      if (newSession?.user) {
-        resolvePerfil(newSession.user.id)
-      } else {
+      if (!newSession?.user) {
         setRole(null)
         setPerfil(null)
         setMeuIdUsuario(null)
         setMeuIdAdm(null)
+        return
       }
+
+      // Consultas ao banco dentro deste callback travam o lock interno do
+      // supabase-js e deixam o login preso na tela. Adia a resolução do perfil.
+      setTimeout(() => {
+        void resolvePerfil(newSession.user.id)
+      }, 0)
     })
 
     return () => listener.subscription.unsubscribe()

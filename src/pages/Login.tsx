@@ -5,8 +5,13 @@ import { supabase } from '../lib/supabase'
 
 type Aba = 'entrar' | 'ativar-usuario' | 'ativar-admin' | 'esqueci-senha'
 
+function destinoAposLogin(from?: string) {
+  if (!from || from === '/login') return '/'
+  return from
+}
+
 export function Login() {
-  const { signIn, ativarCadastroUsuario, ativarCadastroAdmin } = useAuth()
+  const { signIn, ativarCadastroUsuario, ativarCadastroAdmin, session, role, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [aba, setAba] = useState<Aba>('entrar')
@@ -28,6 +33,12 @@ export function Login() {
     }
   }, [location.state])
 
+  useEffect(() => {
+    if (!authLoading && session && role) {
+      navigate(destinoAposLogin((location.state as { from?: string })?.from), { replace: true })
+    }
+  }, [authLoading, session, role, location.state, navigate])
+
   function limparMensagens() {
     setError(null)
     setOk(false)
@@ -41,107 +52,15 @@ export function Login() {
 
     try {
       const emailNormalizado = email.trim().toLowerCase()
-
-      // 1. Autentica no Supabase Auth
-      const { error: signInError } = await signIn(
-        emailNormalizado,
-        password
-      )
+      const { error: signInError } = await signIn(emailNormalizado, password)
 
       if (signInError) {
         setError(signInError)
-        setLoading(false)
         return
       }
 
-      // 2. Obtém a sessão atual
-      const {
-        data: { session },
-        error: userError,
-      } = await supabase.auth.getSession()
-
-      const user = session?.user
-
-      if (userError || !user) {
-        setError('Não foi possível identificar o usuário autenticado.')
-        setLoading(false)
-        return
-      }
-
-      // 3. Verifica primeiro se o usuário é administrador
-      const {
-        data: administrador,
-        error: administradorError,
-      } = await supabase
-        .from('administradores')
-        .select('id_adm, uuid, nome, email, codigo')
-        .eq('uuid', user.id)
-        .maybeSingle()
-
-      if (administradorError) {
-        setError(
-          'Erro ao verificar o perfil de administrador: ' +
-            administradorError.message
-        )
-        setLoading(false)
-        return
-      }
-
-      // 4. Login como administrador
-      if (administrador) {
-        const dest = (location.state as { from?: string })?.from ?? '/'
-        navigate(dest, {
-          replace: true,
-          state: {
-            perfil: 'admin',
-            ehAdministrador: true,
-            idAdm: administrador.id_adm,
-            nome: administrador.nome,
-            email: administrador.email,
-          },
-        })
-        return
-      }
-
-      // 5. Se não é administrador, verifica se é usuário comum
-      const {
-        data: usuario,
-        error: usuarioError,
-      } = await supabase
-        .from('usuarios')
-        .select('id_usuario, uuid, nome, email, matricula')
-        .eq('uuid', user.id)
-        .maybeSingle()
-
-      if (usuarioError) {
-        setError(
-          'Erro ao verificar o perfil de usuário: ' + usuarioError.message
-        )
-        setLoading(false)
-        return
-      }
-
-      // 6. Login como usuário comum
-      if (usuario) {
-        const dest = (location.state as { from?: string })?.from ?? '/'
-        navigate(dest, {
-          replace: true,
-          state: {
-            perfil: 'usuario',
-            ehAdministrador: false,
-            idUsuario: usuario.id_usuario,
-            nome: usuario.nome,
-            email: usuario.email,
-          },
-        })
-        return
-      }
-
-      // 7. Se autenticou no Auth mas a coluna 'uuid' ainda está NULL nas duas tabelas:
-      setError(
-        'Conta autenticada, porém sem registro de perfil (administrador ou usuário) ativo no sistema.'
-      )
-    } catch (err) {
+      navigate(destinoAposLogin((location.state as { from?: string })?.from), { replace: true })
+    } catch {
       setError('Ocorreu um erro inesperado ao realizar o login.')
     } finally {
       setLoading(false)
@@ -211,19 +130,19 @@ export function Login() {
 
   return (
     <div className="mx-auto flex min-h-[75vh] max-w-md flex-col justify-center px-4 py-16">
-      <div className="reg-mark rounded-xl border border-(--color-border) bg-(--color-surface) p-8 shadow-sm">
-        <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">
+      <div className="rounded-3xl border border-(--color-border) bg-white/90 p-8 shadow-[0_24px_60px_color-mix(in_srgb,#0B1220_8%,transparent)] backdrop-blur">
+        <p className="kicker">
           acesso ao sistema
         </p>
 
-        <h1 className="mb-6 font-display text-2xl font-bold">
-          {aba === 'entrar' && 'Entrar no AgendaLab'}
+        <h1 className="mb-6 font-display text-3xl font-extrabold tracking-tight">
+          {aba === 'entrar' && 'Entrar no ReservaAI'}
           {aba === 'esqueci-senha' && 'Redefinir Senha'}
           {(aba === 'ativar-usuario' || aba === 'ativar-admin') &&
             'Ativar meu cadastro'}
         </h1>
 
-        <div className="mb-6 flex gap-1 rounded-lg bg-(--color-paper) p-1">
+        <div className="mb-6 flex gap-1 rounded-2xl bg-(--color-paper) p-1">
           {(
             [
               ['entrar', 'entrar'],
@@ -238,10 +157,10 @@ export function Login() {
                 setAba(value)
                 limparMensagens()
               }}
-              className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium capitalize transition-colors ${
+              className={`flex-1 rounded-xl px-2 py-1.5 text-xs font-semibold capitalize transition-colors ${
                 aba === value ||
                 (aba === 'esqueci-senha' && value === 'entrar')
-                  ? 'bg-(--color-surface) text-(--color-cyan) shadow-sm'
+                  ? 'bg-white text-(--color-cyan) shadow-sm'
                   : 'text-(--color-ink-soft) hover:text-(--color-ink)'
               }`}
             >
@@ -253,7 +172,7 @@ export function Login() {
         {aba === 'entrar' && (
           <form onSubmit={handleLogin} className="space-y-4">
             {mensagemSucesso && (
-              <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
+              <p className="alert-ok">
                 {mensagemSucesso}
               </p>
             )}
@@ -308,7 +227,7 @@ export function Login() {
           <div>
             {mensagemSucesso ? (
               <div className="space-y-4">
-                <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
+                <p className="alert-ok">
                   {mensagemSucesso}
                 </p>
 
@@ -505,7 +424,7 @@ export function Login() {
 
 function SucessoAtivacao() {
   return (
-    <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
+    <p className="alert-ok">
       Cadastro ativado com sucesso! Já dá pra entrar na aba{' '}
       <strong>"entrar"</strong> com o e-mail e a senha que você
       criou.
@@ -515,7 +434,7 @@ function SucessoAtivacao() {
 
 function ErroMsg({ texto }: { texto: string }) {
   return (
-    <p className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">
+    <p className="alert-error">
       {texto}
     </p>
   )

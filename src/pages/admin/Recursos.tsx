@@ -85,10 +85,6 @@ export function AdminRecursos() {
   const [alvoBloqueio, setAlvoBloqueio] = useState<AlvoBloqueio | null>(null)
   const [alvoEmergencia, setAlvoEmergencia] = useState<AlvoBloqueio | null>(null)
   const [sucessoBloqueio, setSucessoBloqueio] = useState<string | null>(null)
-  // Trava de monetização: verifica o plano e conta as salas
-  const isPremium = localStorage.getItem('agendalab_plano') === 'premium';
-  const limiteSalasAtingido = !isPremium && aba === 'sala' && salas.length >= 2;
-
   async function carregar() {
     setLoading(true)
     setErro(null)
@@ -201,12 +197,12 @@ export function AdminRecursos() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10 md:px-6">
+    <div className="mx-auto max-w-5xl px-4 py-10 md:px-8">
       
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="mb-1 font-mono text-xs uppercase tracking-wider text-(--color-cyan)">painel administrativo</p>
-          <h1 className="font-display text-3xl font-bold">Gestão de recursos</h1>
+          <p className="kicker">painel administrativo</p>
+          <h1 className="font-display text-4xl font-extrabold tracking-tight">Gestão de recursos</h1>
         </div>
         
         <div className="flex flex-col items-end sm:items-start gap-1">
@@ -216,16 +212,9 @@ export function AdminRecursos() {
               setEditando(null)
               setModalAberto(true)
             }}
-            disabled={limiteSalasAtingido}
           >
             + novo {aba}
           </button>
-          
-          {limiteSalasAtingido && (
-            <span className="text-[10px] text-(--color-coral) font-medium max-w-[200px] text-right sm:text-left leading-tight animate-fade-in">
-              Limite de 2 salas atingido. <a href="/admin/planos" className="underline font-bold hover:text-(--color-coral)/80">Faça upgrade para Premium</a>
-            </span>
-          )}
         </div>
       </div>
 
@@ -234,36 +223,34 @@ export function AdminRecursos() {
           <button
             key={t}
             onClick={() => setAba(t)}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-              aba === t ? 'border-(--color-cyan) bg-(--color-cyan-soft) text-(--color-cyan)' : 'border-(--color-border) text-(--color-ink-soft) hover:bg-black/5'
-            }`}
+            className={`chip capitalize ${aba === t ? 'chip-on' : ''}`}
           >
             {t === 'sala' ? 'salas' : 'equipamentos'}
           </button>
         ))}
       </div>
 
-      {erro && <p className="mb-4 rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) px-3 py-2 text-sm text-(--color-coral)">{erro}</p>}
+      {erro && <p className="alert-error mb-4">{erro}</p>}
       {sucessoBloqueio && (
-        <p className="mb-4 rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-2 text-sm text-(--color-green)">
+        <p className="alert-ok mb-4">
           {sucessoBloqueio}
         </p>
       )}
 
       {loading ? (
-        <p className="font-mono text-sm text-(--color-ink-soft)">carregando…</p>
+        <p className="text-sm text-(--color-ink-soft)">carregando…</p>
       ) : lista.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-(--color-border) p-10 text-center text-(--color-ink-soft)">Nenhum recurso cadastrado ainda.</p>
+        <p className="empty">Nenhum recurso cadastrado ainda.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-(--color-border)">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-(--color-paper) font-mono text-xs uppercase tracking-wide text-(--color-ink-soft)">
+        <div className="table-wrap">
+          <table>
+            <thead>
               <tr>
-                <th className="px-4 py-3">Nome</th>
-                <th className="px-4 py-3">{aba === 'sala' ? 'Capacidade' : 'Disponível / Manutenção'}</th>
-                <th className="px-4 py-3">Regras de Uso</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Ações</th>
+                <th>Nome</th>
+                <th>{aba === 'sala' ? 'Capacidade' : 'Disponível / Manutenção'}</th>
+                <th>Regras de Uso</th>
+                <th>Status</th>
+                <th className="text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -372,14 +359,14 @@ export function AdminRecursos() {
       <section className="mt-8">
         <div className="mb-3 flex items-end justify-between gap-4">
           <div>
-            <p className="font-mono text-xs uppercase tracking-wider text-(--color-amber)">agenda de manutenção</p>
-            <h2 className="font-display text-xl font-semibold">Interdições atuais e futuras</h2>
+            <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-amber)">agenda de manutenção</p>
+            <h2 className="font-display text-xl font-semibold tracking-tight">Interdições atuais e futuras</h2>
           </div>
-          <span className="font-mono text-xs text-(--color-ink-soft)">{bloqueiosDaAba.length} registro(s)</span>
+          <span className="text-xs text-(--color-ink-soft)">{bloqueiosDaAba.length} registro(s)</span>
         </div>
 
         {bloqueiosDaAba.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-(--color-border) bg-(--color-surface) p-5 text-sm text-(--color-ink-soft)">
+          <p className="empty text-sm">
             Nenhuma interdição programada para {aba === 'sala' ? 'salas' : 'equipamentos'}.
           </p>
         ) : (
@@ -387,7 +374,7 @@ export function AdminRecursos() {
             {bloqueiosDaAba.map((bloqueio) => (
               <div
                 key={bloqueio.id}
-                className="flex flex-col gap-3 rounded-lg border border-(--color-amber)/40 bg-(--color-amber-soft) p-4 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-3 rounded-2xl border border-(--color-amber)/40 bg-(--color-amber-soft) p-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
                   <div className="mb-1 flex flex-wrap items-center gap-2">
