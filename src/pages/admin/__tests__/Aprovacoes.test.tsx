@@ -180,6 +180,28 @@ describe('AdminAprovacoes Page', () => {
     })
   })
 
+  it('impede o cancelamento sem uma justificativa válida', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AdminAprovacoes />
+      </MemoryRouter>
+    )
+
+    await screen.findByText(/Laboratório Beta/i)
+    await user.click(screen.getByRole('button', { name: /^cancelar$/i }))
+
+    const inputJustificativa = screen.getByRole('textbox', { name: /justificativa/i })
+    expect(inputJustificativa).toBeRequired()
+
+    await user.type(inputJustificativa, '   ')
+    await user.click(screen.getByRole('button', { name: /confirmar cancelamento/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Informe a justificativa da recusa.')
+    expect(mockUpdateSalas).not.toHaveBeenCalled()
+  })
+
   it('alterna para aba de devoluções e registra devolução de equipamento', async () => {
     const user = userEvent.setup()
 

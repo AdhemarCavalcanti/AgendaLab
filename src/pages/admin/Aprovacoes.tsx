@@ -27,6 +27,7 @@ export function AdminAprovacoes() {
   const [processando, setProcessando] = useState<number | null>(null)
   const [rejeitando, setRejeitando] = useState<Solicitacao | null>(null)
   const [justificativa, setJustificativa] = useState('')
+  const [erroJustificativa, setErroJustificativa] = useState<string | null>(null)
   const [novaSolicitacao, setNovaSolicitacao] = useState(false)
 
   async function carregar() {
@@ -183,6 +184,14 @@ export function AdminAprovacoes() {
 
   async function confirmarRejeicao() {
     if (!rejeitando) return
+
+    const justificativaNormalizada = justificativa.trim()
+    if (!justificativaNormalizada) {
+      setErroJustificativa('Informe a justificativa da recusa.')
+      return
+    }
+
+    setErroJustificativa(null)
     setProcessando(rejeitando.id)
     const tabela = rejeitando.tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
 
@@ -196,9 +205,7 @@ export function AdminAprovacoes() {
       payload.status_devolucao = 'devolvido'
     }
 
-    if (justificativa.trim()) {
-      payload.motivo = justificativa.trim()
-    }
+    payload.motivo = justificativaNormalizada
 
     // Executa o update e retorna os dados atualizados para conferência
     const { data, error } = await supabase
@@ -222,6 +229,7 @@ export function AdminAprovacoes() {
 
     setRejeitando(null)
     setJustificativa('')
+    setErroJustificativa(null)
     carregar()
   }
 
@@ -293,7 +301,11 @@ export function AdminAprovacoes() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setRejeitando(item)}
+                    onClick={() => {
+                      setJustificativa('')
+                      setErroJustificativa(null)
+                      setRejeitando(item)
+                    }}
                     disabled={processando === item.id}
                     className="btn-secondary hover:border-(--color-coral) hover:text-(--color-coral)"
                   >
@@ -346,20 +358,56 @@ export function AdminAprovacoes() {
       )}
 
       {rejeitando && (
-        <Modal title="Cancelar reserva" onClose={() => setRejeitando(null)}>
+        <Modal
+          title="Cancelar reserva"
+          onClose={() => {
+            setRejeitando(null)
+            setJustificativa('')
+            setErroJustificativa(null)
+          }}
+        >
           <div className="space-y-4">
             <p className="text-sm text-(--color-ink-soft)">
               {rejeitando.recursoNome} · {new Date(rejeitando.inicio).toLocaleString('pt-BR')}
             </p>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium">Justificativa (opcional)</span>
-              <textarea value={justificativa} onChange={(e) => setJustificativa(e.target.value)} className="input" rows={3} placeholder="Explique o motivo do cancelamento…" />
+            <label className="block" htmlFor="justificativa-rejeicao">
+              <span className="mb-1 block text-sm font-medium">Justificativa (obrigatória)</span>
+              <textarea
+                id="justificativa-rejeicao"
+                value={justificativa}
+                onChange={(e) => {
+                  setJustificativa(e.target.value)
+                  if (erroJustificativa) setErroJustificativa(null)
+                }}
+                className="input"
+                rows={3}
+                placeholder="Explique o motivo do cancelamento…"
+                required
+                aria-invalid={Boolean(erroJustificativa)}
+                aria-describedby={erroJustificativa ? 'erro-justificativa-rejeicao' : undefined}
+              />
+              {erroJustificativa && (
+                <p id="erro-justificativa-rejeicao" role="alert" className="mt-1 text-sm text-(--color-coral)">
+                  {erroJustificativa}
+                </p>
+              )}
             </label>
             <div className="flex justify-end gap-2">
-              <button className="btn-secondary" onClick={() => setRejeitando(null)}>
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setRejeitando(null)
+                  setJustificativa('')
+                  setErroJustificativa(null)
+                }}
+              >
                 voltar
               </button>
-              <button className="btn-primary bg-(--color-coral) hover:bg-(--color-coral)" onClick={confirmarRejeicao}>
+              <button
+                className="btn-primary bg-(--color-coral) hover:bg-(--color-coral)"
+                onClick={confirmarRejeicao}
+                disabled={processando === rejeitando.id}
+              >
                 confirmar cancelamento
               </button>
             </div>
