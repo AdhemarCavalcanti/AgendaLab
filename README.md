@@ -96,6 +96,18 @@ A migração:
 - Caso exceda a capacidade, o banco de dados rejeita a operação com o erro: `"A lotação máxima permitida para este espaço é de X pessoas."`.
 - Atualiza a RPC `solicitar_reserva` com validação de payload nativa pré-inserção.
 
+### ⏱️ Teto Semanal de Horas em Recursos Concorridos
+
+Para garantir oportunidades iguais para todos os alunos e impedir o monopólio de equipamentos escassos ou recursos concorridos, aplique:
+
+```text
+supabase/sql/teto_horas_semanal.sql
+```
+
+A migração:
+- Cria a função `public.calcular_horas_semana_usuario` que calcula a soma das durações das reservas do aluno na semana vigente (segunda a domingo, via `date_trunc('week')`).
+- Cria triggers `trg_validar_teto_semanal_reserva_equip` e `trg_validar_teto_semanal_reserva_sala` que impedem reservas ativas cujo somatório de horas semanais para o recurso ultrapasse a cota de **4 horas semanais por aluno**, rejeitando no banco com aviso explicativo.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -217,6 +229,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 - **Interdição emergencial**: o administrador escolhe a data e um ou mais turnos (manhã, tarde e noite), informa uma justificativa pública e revisa os usuários afetados. Na confirmação, os períodos são bloqueados, todas as reservas ativas são marcadas como “Cancelada pela Administração” e os usuários recebem alertas automáticos — tudo na mesma transação.
 - **Lotação máxima de sala**: o formulário de reserva exibe de forma visível a capacidade máxima permitida daquele recurso. O campo "Quantidade de pessoas / Ocupantes" aceita apenas números inteiros maiores que zero. Se o número informado for superior à capacidade da sala, o botão de submissão é desabilitado com o erro exato: *"A lotação máxima permitida para este espaço é de X pessoas."*, com validação dupla na interface e no banco de dados.
 - **Justificativa obrigatória na recusa de reserva**: o painel de aprovações exige o preenchimento de uma justificativa formal ao recusar uma solicitação pendente, visível no histórico do usuário.
+- **Teto semanal de horas em recursos concorridos**: O sistema contabiliza as horas agendadas pelo aluno na semana vigente (segunda a domingo). Se uma nova solicitação ultrapassar o teto configurado (máx. 4h semanais por recurso), o envio é imediatamente bloqueado no modal com aviso explicativo detalhando as horas já agendadas e a duração do pedido, com validação preventiva na interface e no banco de dados.
 - **Acessórios opcionais da sala**: o formulário lista somente itens com estoque disponível no período, permite escolher quantidades e envia sala + acessórios atomicamente. O histórico apresenta os itens vinculados em um único resumo.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 

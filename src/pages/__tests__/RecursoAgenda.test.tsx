@@ -543,4 +543,127 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
       await screen.findByText('A lotação máxima permitida para este espaço é de 5 pessoas.')
     ).toBeInTheDocument()
   })
+
+  it('contabiliza horas da semana e bloqueia com aviso explicativo quando ultrapassa o teto semanal de 4h', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    setupAuth('aluno', 1)
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'equipamentos') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 5, nome: 'Cortadora a Laser', quantidade: 2, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === 'reservas_equipamentos') {
+        return criarConsultaComResultado([
+          {
+            inicio: '2026-09-11T08:00:00.000Z',
+            fim: '2026-09-11T11:00:00.000Z',
+            status: 'aprovada',
+          },
+        ])
+      }
+      return criarConsultaVazia()
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/equipamento/5']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Cortadora a Laser')).toBeInTheDocument()
+
+    const slot14 = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('14:00 – 15:00')
+    )
+    const slot15 = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('15:00 – 16:00')
+    )
+    await user.click(slot14!)
+    await user.click(slot15!)
+
+    const btnSolicitar = screen.getByRole('button', { name: /solicitar reserva/i })
+    await user.click(btnSolicitar)
+
+    expect(await screen.findByText('Confirmar solicitação de reserva')).toBeInTheDocument()
+    expect(await screen.findByText(/Cota semanal utilizada:/i)).toBeInTheDocument()
+    expect(screen.getByText('3h de 4h')).toBeInTheDocument()
+
+    expect(
+      screen.getByText(
+        /Limite semanal de horas excedido. Esta solicitação \(2h\) ultrapassa o teto semanal de 4h \(você já possui 3h agendadas nesta semana\)./i
+      )
+    ).toBeInTheDocument()
+
+    const btnConfirmar = screen.getByRole('button', { name: /confirmar solicitação/i })
+    expect(btnConfirmar).toBeDisabled()
+  })
+
+  it('permite confirmação quando a nova solicitação está dentro da cota semanal de 4h', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    setupAuth('aluno', 1)
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'equipamentos') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id: 5, nome: 'Cortadora a Laser', quantidade: 2, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === 'reservas_equipamentos') {
+        return criarConsultaComResultado([
+          {
+            inicio: '2026-09-11T09:00:00.000Z',
+            fim: '2026-09-11T10:00:00.000Z',
+            status: 'aprovada',
+          },
+        ])
+      }
+      return criarConsultaVazia()
+    })
+
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { sucesso: true, id: 99 },
+      error: null,
+    } as any)
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/equipamento/5']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Cortadora a Laser')).toBeInTheDocument()
+
+    const slot14 = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('14:00 – 15:00')
+    )
+    await user.click(slot14!)
+
+    const btnSolicitar = screen.getByRole('button', { name: /solicitar reserva/i })
+    await user.click(btnSolicitar)
+
+    expect(await screen.findByText('Confirmar solicitação de reserva')).toBeInTheDocument()
+    expect(await screen.findByText(/Cota semanal utilizada:/i)).toBeInTheDocument()
+    expect(screen.getByText('1h de 4h')).toBeInTheDocument()
+
+    expect(screen.queryByText(/Limite semanal de horas excedido/i)).not.toBeInTheDocument()
+
+    const btnConfirmar = screen.getByRole('button', { name: /confirmar solicitação/i })
+    expect(btnConfirmar).not.toBeDisabled()
+  })
 })

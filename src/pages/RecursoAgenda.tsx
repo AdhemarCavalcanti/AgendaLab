@@ -31,6 +31,48 @@ const MSG_CONFLITO_CONCORRENCIA =
 const MSG_MANUTENCAO = 'Este recurso está em manutenção no período selecionado. Escolha outro horário.'
 const LIMITE_SALAS_ATIVAS_GRATIS = 2
 const LIMITE_RESERVAS_MENSAIS_GRATIS = 50
+export const TETO_HORAS_SEMANAIS = 4
+
+export function getInicioEFimSemana(dataReferencia: Date) {
+  const d = new Date(dataReferencia)
+  const diaSemana = d.getDay()
+  const diffSegunda = d.getDate() - diaSemana + (diaSemana === 0 ? -6 : 1)
+  const inicioSemana = new Date(d.getFullYear(), d.getMonth(), diffSegunda, 0, 0, 0, 0)
+  const fimSemana = new Date(inicioSemana)
+  fimSemana.setDate(inicioSemana.getDate() + 7)
+  return { inicioSemana, fimSemana }
+}
+
+export async function obterHorasSemanaUsuario(
+  idUsuario: number,
+  tipo: TipoRecurso,
+  idRecurso: number,
+  dataSlot: Date
+): Promise<number> {
+  const { inicioSemana, fimSemana } = getInicioEFimSemana(dataSlot)
+  const tabela = tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
+  const colunaRecurso = tipo === 'sala' ? 'id_sala' : 'id_equipamento'
+
+  const { data, error } = await supabase
+    .from(tabela)
+    .select('inicio, fim')
+    .eq('id_usuario', idUsuario)
+    .eq(colunaRecurso, idRecurso)
+    .in('status', ['pendente', 'aprovada'])
+    .gte('inicio', inicioSemana.toISOString())
+    .lt('inicio', fimSemana.toISOString())
+
+  if (error || !data) return 0
+
+  const totalHoras = data.reduce((acc, r: { inicio: string; fim: string }) => {
+    const inicio = new Date(r.inicio).getTime()
+    const fim = new Date(r.fim).getTime()
+    const horas = Math.max(0, (fim - inicio) / (1000 * 60 * 60))
+    return acc + horas
+  }, 0)
+
+  return Math.round(totalHoras * 10) / 10
+}
 
 function planoEhPremium() {
   return localStorage.getItem('agendalab_plano') === 'premium'
@@ -122,6 +164,7 @@ export function RecursoAgenda() {
   const [erroAcessorios, setErroAcessorios] = useState<string | null>(null)
   const carregamentoAcessoriosId = useRef(0)
   const [avisoLimiteUsuario, setAvisoLimiteUsuario] = useState<string | null>(null)
+  const [horasSemanaUsuario, setHorasSemanaUsuario] = useState(0)
 
   const dias = useMemo(() => proximosDias(14), [])
   const tabela = tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
@@ -381,18 +424,40 @@ export function RecursoAgenda() {
     return Math.max(0, estoqueTotal - maxUsoNoIntervalo)
   }, [pendingSlot, ocupacoes, tipo, estoqueTotal])
 
-  function abrirConfirmacao(inicio: Date, fim: Date) {
+  async function abrirConfirmacao(inicio: Date, fim: Date) {
     setFormErro(null)
     setQtdPessoas(1)
     setQtdEquipamento(1)
     setAceitouRegras(false)
     setAcessoriosSelecionados({})
     if (tipo === 'sala') setCarregandoAcessorios(true)
+    if (meuIdUsuario && tipo && idNum) {
+      const horas = await obterHorasSemanaUsuario(meuIdUsuario, tipo, idNum, inicio)
+      setHorasSemanaUsuario(horas)
+    }
     setPendingSlot({ inicio, fim })
   }
 
+  const duracaoHorasSlot = useMemo(() => {
+    if (!pendingSlot) return 0
+    const horas = (pendingSlot.fim.getTime() - pendingSlot.inicio.getTime()) / (1000 * 60 * 60)
+    return Math.round(horas * 10) / 10
+  }, [pendingSlot])
+
+  const limiteHorasExcedido = useMemo(() => {
+    if (role !== 'aluno' || !pendingSlot) return false
+    return (horasSemanaUsuario + duracaoHorasSlot) > TETO_HORAS_SEMANAIS
+  }, [role, pendingSlot, horasSemanaUsuario, duracaoHorasSlot])
+
   async function confirmarReserva() {
     if (!pendingSlot || !user || !tipo || !recurso || meuIdUsuario === null) return
+
+    if (role === 'aluno' && limiteHorasExcedido) {
+      setFormErro(
+        `Limite semanal de horas excedido. Esta solicitação (${duracaoHorasSlot}h) ultrapassa o teto semanal de ${TETO_HORAS_SEMANAIS}h (você já possui ${horasSemanaUsuario}h agendadas nesta semana).`
+      )
+      return
+    }
 
     if (tipo === 'sala') {
       const lotacao = (recurso as Sala).lotacao
@@ -740,8 +805,13 @@ export function RecursoAgenda() {
               <div className="rounded-md border border-(--color-border) bg-(--color-paper) p-3 font-mono text-sm">
                 <p><span className="text-(--color-ink-soft)">{tipo === 'sala' ? 'Sala: ' : 'Equipamento: '}</span>{nome}</p>
                 <p className="text-(--color-ink-soft)">
-                  {pendingSlot.inicio.toLocaleDateString('pt-BR')} · {pendingSlot.inicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {pendingSlot.fim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {pendingSlot.inicio.toLocaleDateString('pt-BR')} · {pendingSlot.inicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {pendingSlot.fim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} ({duracaoHorasSlot}h)
                 </p>
+                {role === 'aluno' && (
+                  <p className="mt-1 text-xs text-(--color-ink-soft)">
+                    Cota semanal utilizada: <strong className="text-(--color-ink)">{horasSemanaUsuario}h de {TETO_HORAS_SEMANAIS}h</strong>
+                  </p>
+                )}
                 {tipo === 'sala' && (
                   <p className="mt-1 text-sm font-sans text-(--color-ink)">
                     <span className="text-(--color-ink-soft)">Capacidade máxima permitida: </span>
@@ -757,6 +827,12 @@ export function RecursoAgenda() {
                   </p>
                 )}
               </div>
+
+              {limiteHorasExcedido && (
+                <div className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-3 text-xs text-(--color-coral)">
+                  Limite semanal de horas excedido. Esta solicitação ({duracaoHorasSlot}h) ultrapassa o teto semanal de {TETO_HORAS_SEMANAIS}h (você já possui {horasSemanaUsuario}h agendadas nesta semana).
+                </div>
+              )}
 
               {tipo === 'sala' && (
                 <>
@@ -925,6 +1001,7 @@ export function RecursoAgenda() {
                   onClick={confirmarReserva}
                   disabled={
                     enviando ||
+                    limiteHorasExcedido ||
                     (tipo === 'sala' && carregandoAcessorios) ||
                     (recurso.regras_uso && !aceitouRegras) ||
                     (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || !Number.isInteger(qtdPessoas) || qtdPessoas < 1)) ||
