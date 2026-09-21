@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { StatusBadge } from '../components/StatusBadge'
-import type { StatusReserva } from '../lib/types'
+import { Modal } from '../components/Modal'
+import type { SeveridadeAvaria, StatusReserva } from '../lib/types'
 
 interface Item {
   id: number
+  idRecurso: number
   tipo: 'sala' | 'equipamento'
   recursoNome: string
   inicio: string
@@ -34,6 +36,67 @@ export function MinhasReservas() {
   const [filtro, setFiltro] = useState<'todas' | StatusReserva>('todas')
   const [loading, setLoading] = useState(true)
   const [cancelando, setCancelando] = useState<number | null>(null)
+
+  // Estados para reporte de avaria
+  const [modalAvariaItem, setModalAvariaItem] = useState<Item | null>(null)
+  const [severidade, setSeveridade] = useState<SeveridadeAvaria>('media')
+  const [descricaoAvaria, setDescricaoAvaria] = useState('')
+  const [enviandoAvaria, setEnviandoAvaria] = useState(false)
+  const [erroAvaria, setErroAvaria] = useState<string | null>(null)
+  const [sucessoAvaria, setSucessoAvaria] = useState<string | null>(null)
+  const [avariasEnviadas, setAvariasEnviadas] = useState<Set<string>>(new Set())
+
+  function abrirModalAvaria(item: Item) {
+    setModalAvariaItem(item)
+    setSeveridade('media')
+    setDescricaoAvaria('')
+    setErroAvaria(null)
+    setSucessoAvaria(null)
+  }
+
+  function fecharModalAvaria() {
+    setModalAvariaItem(null)
+    setErroAvaria(null)
+    setSucessoAvaria(null)
+  }
+
+  async function submeterAvaria(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalAvariaItem) return
+    if (!descricaoAvaria.trim()) {
+      setErroAvaria('Descreva a ocorrência detalhadamente.')
+      return
+    }
+
+    setEnviandoAvaria(true)
+    setErroAvaria(null)
+
+    const payload: any = {
+      id_usuario: meuIdUsuario,
+      tipo_recurso: modalAvariaItem.tipo,
+      id_recurso: modalAvariaItem.idRecurso,
+      recurso_nome: modalAvariaItem.recursoNome,
+      id_reserva_sala: modalAvariaItem.tipo === 'sala' ? modalAvariaItem.id : null,
+      id_reserva_equipamento: modalAvariaItem.tipo === 'equipamento' ? modalAvariaItem.id : null,
+      severidade,
+      descricao: descricaoAvaria.trim(),
+      status: 'pendente',
+    }
+
+    const { error } = await supabase.from('relatos_avarias').insert(payload)
+
+    setEnviandoAvaria(false)
+
+    if (error) {
+      setErroAvaria('Não foi possível registrar o relato. Tente novamente.')
+    } else {
+      setSucessoAvaria('Relato de avaria enviado com sucesso à administração.')
+      setAvariasEnviadas((prev) => new Set(prev).add(`${modalAvariaItem.tipo}-${modalAvariaItem.id}`))
+      setTimeout(() => {
+        fecharModalAvaria()
+      }, 1500)
+    }
+  }
 
   async function carregar() {
     setLoading(true)
@@ -99,6 +162,7 @@ export function MinhasReservas() {
 
     const itensSalas: Item[] = (resSalas.data ?? []).map((r: any) => ({
       id: r.id,
+      idRecurso: r.id_sala,
       tipo: 'sala',
       recursoNome: mapaSalas.get(r.id_sala) ?? `Sala #${r.id_sala}`,
       inicio: r.inicio,
@@ -114,6 +178,7 @@ export function MinhasReservas() {
       .filter((r: any) => r.id_reserva_sala === null || r.id_reserva_sala === undefined)
       .map((r: any) => ({
         id: r.id,
+        idRecurso: r.id_equipamento,
         tipo: 'equipamento',
         recursoNome: mapaEquip.get(r.id_equipamento) ?? `Equipamento #${r.id_equipamento}`,
         inicio: r.inicio,
@@ -179,6 +244,10 @@ export function MinhasReservas() {
           {filtrados.map((item) => {
             const futura = new Date(item.inicio) > agora
             const podeCancelar = futura && (item.status === 'pendente' || item.status === 'aprovada')
+            const concluida = item.status === 'aprovada' && new Date(item.inicio) <= agora
+            const chaveAvaria = `${item.tipo}-${item.id}`
+            const jaReportado = avariasEnviadas.has(chaveAvaria)
+
             return (
               <div key={`${item.tipo}-${item.id}`} className="card flex flex-wrap items-center justify-between gap-3 p-5">
                 <div>
@@ -205,19 +274,99 @@ export function MinhasReservas() {
                     </p>
                   )}
                 </div>
-                {podeCancelar && (
-                  <button
-                    onClick={() => cancelar(item)}
-                    disabled={cancelando === item.id}
-                    className="btn-secondary hover:border-(--color-coral) hover:text-(--color-coral)"
-                  >
-                    {cancelando === item.id ? 'cancelando…' : 'cancelar'}
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {concluida && (
+                    <button
+                      type="button"
+                      onClick={() => abrirModalAvaria(item)}
+                      className="btn-secondary border-(--color-amber)/50 text-(--color-amber) hover:bg-(--color-amber)/10"
+                    >
+                      {jaReportado ? 'Reportar outro problema' : 'Reportar problema/avaria'}
+                    </button>
+                  )}
+                  {podeCancelar && (
+                    <button
+                      onClick={() => cancelar(item)}
+                      disabled={cancelando === item.id}
+                      className="btn-secondary hover:border-(--color-coral) hover:text-(--color-coral)"
+                    >
+                      {cancelando === item.id ? 'cancelando…' : 'cancelar'}
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}
         </div>
+      )}
+
+      {modalAvariaItem && (
+        <Modal
+          onClose={fecharModalAvaria}
+          title={`Reportar problema/avaria: ${modalAvariaItem.recursoNome}`}
+        >
+          <form onSubmit={submeterAvaria} className="space-y-4">
+            <p className="text-sm text-(--color-ink-soft)">
+              Descreva o defeito ou avaria identificado após o uso deste recurso para que a administração seja notificada e tome as devidas providências.
+            </p>
+
+            {erroAvaria && <p className="alert-error text-sm">{erroAvaria}</p>}
+            {sucessoAvaria && (
+              <p className="rounded-lg bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400">
+                {sucessoAvaria}
+              </p>
+            )}
+
+            <div>
+              <label htmlFor="severidade-select" className="mb-1 block text-sm font-medium">
+                Severidade <span className="text-(--color-coral)">*</span>
+              </label>
+              <select
+                id="severidade-select"
+                value={severidade}
+                onChange={(e) => setSeveridade(e.target.value as SeveridadeAvaria)}
+                className="input"
+              >
+                <option value="leve">Leve</option>
+                <option value="media">Média</option>
+                <option value="critica">Crítica</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="descricao-avaria" className="mb-1 block text-sm font-medium">
+                Detalhes da ocorrência <span className="text-(--color-coral)">*</span>
+              </label>
+              <textarea
+                id="descricao-avaria"
+                rows={4}
+                value={descricaoAvaria}
+                onChange={(e) => setDescricaoAvaria(e.target.value)}
+                placeholder="Descreva detalhadamente o defeito ou avaria encontrado..."
+                className="input"
+                required
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={fecharModalAvaria}
+                disabled={enviandoAvaria}
+                className="btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={enviandoAvaria || !descricaoAvaria.trim()}
+                className="btn-primary"
+              >
+                {enviandoAvaria ? 'Enviando…' : 'Enviar relato'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
   )

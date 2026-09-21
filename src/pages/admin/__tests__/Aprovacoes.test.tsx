@@ -64,6 +64,23 @@ describe('AdminAprovacoes Page', () => {
     },
   ]
 
+  const mockAvarias = [
+    {
+      id: 50,
+      id_usuario: 5,
+      tipo_recurso: 'equipamento',
+      id_recurso: 20,
+      recurso_nome: 'Multímetro Digital',
+      id_reserva_sala: null,
+      id_reserva_equipamento: 5,
+      severidade: 'critica',
+      descricao: 'Display quebrado e cabos danificados',
+      status: 'pendente',
+      criado_em: '2026-09-20T10:00:00.000Z',
+      usuarios: { nome: 'Carlos Aluno', email: 'carlos@ufpe.br', matricula: '20231' },
+    },
+  ]
+
   const mockUpdateChain = {
     select: vi.fn().mockResolvedValue({ data: [{ id: 1 }], error: null }),
     then(resolve: any, reject?: any) {
@@ -78,6 +95,9 @@ describe('AdminAprovacoes Page', () => {
     eq: vi.fn().mockReturnValue({
       select: vi.fn().mockResolvedValue({ data: [{ id: 5 }], error: null }),
     }),
+  })
+  const mockUpdateAvarias = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ data: [{ id: 50 }], error: null }),
   })
 
   beforeEach(() => {
@@ -142,6 +162,13 @@ describe('AdminAprovacoes Page', () => {
             ],
             error: null,
           }),
+        } as any
+      }
+      if (table === 'relatos_avarias') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          order: vi.fn().mockResolvedValue({ data: mockAvarias, error: null }),
+          update: mockUpdateAvarias,
         } as any
       }
       return { select: vi.fn().mockReturnThis() } as any
@@ -255,6 +282,40 @@ describe('AdminAprovacoes Page', () => {
         expect.objectContaining({
           status_devolucao: 'devolvido',
           id_adm: 3,
+        })
+      )
+    })
+  })
+
+  it('alterna para aba de avarias, visualiza detalhes e altera status', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AdminAprovacoes />
+      </MemoryRouter>
+    )
+
+    await screen.findByText(/Laboratório Beta/i)
+
+    const tabAvarias = screen.getByRole('button', { name: /Avarias reportadas/i })
+    expect(tabAvarias).toHaveTextContent('Avarias reportadas (1)')
+    await user.click(tabAvarias)
+
+    // Detalhes da ocorrência exibidos
+    expect(await screen.findByText('Multímetro Digital')).toBeInTheDocument()
+    expect(screen.getByText(/Severidade: critica/i)).toBeInTheDocument()
+    expect(screen.getByText('Display quebrado e cabos danificados')).toBeInTheDocument()
+    expect(screen.getByText(/Carlos Aluno/i)).toBeInTheDocument()
+
+    // Clica em "Marcar em análise"
+    const btnEmAnalise = screen.getByRole('button', { name: /marcar em análise/i })
+    await user.click(btnEmAnalise)
+
+    await waitFor(() => {
+      expect(mockUpdateAvarias).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'em_analise',
         })
       )
     })

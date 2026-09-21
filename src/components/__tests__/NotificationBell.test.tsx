@@ -66,6 +66,12 @@ describe('NotificationBell Component', () => {
           eq: vi.fn().mockResolvedValue({ count: 2, data: null, error: null }),
         } as any
       }
+      if (table === 'relatos_avarias') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockResolvedValue({ count: 1, data: null, error: null }),
+        } as any
+      }
       return {
         select: vi.fn().mockReturnThis(),
       } as any
@@ -77,8 +83,8 @@ describe('NotificationBell Component', () => {
       </MemoryRouter>
     )
 
-    // Total de 3 salas + 2 equipamentos = 5 pendentes
-    expect(await screen.findByText('5')).toBeInTheDocument()
+    // Total de 3 salas + 2 equipamentos + 1 relato de avaria = 6 pendentes
+    expect(await screen.findByText('6')).toBeInTheDocument()
 
     const bellBtn = screen.getByTitle('Solicitações pendentes')
     await user.click(bellBtn)
