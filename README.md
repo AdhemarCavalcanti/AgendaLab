@@ -83,6 +83,19 @@ supabase/sql/acessorios_reserva_sala.sql
 
 A migração vincula as reservas de equipamento à sala, atualiza `solicitar_reserva` para criar todo o pedido em uma única transação e sincroniza aprovação ou cancelamento. As quantidades dos acessórios são contabilizadas pelas mesmas triggers de estoque das reservas avulsas, inclusive sob solicitações concorrentes.
 
+### 👥 Validação de Lotação Máxima e Capacidade de Salas
+
+Para garantir a segurança do laboratório e impedir reservas que ultrapassem a capacidade de ocupantes permitida no espaço, aplique:
+
+```text
+supabase/sql/validar_capacidade_sala.sql
+```
+
+A migração:
+- Cria a trigger `trg_validar_lotacao_reserva_sala` em `public.reservas_salas` (`BEFORE INSERT OR UPDATE`), validando no banco de dados que a quantidade de ocupantes seja um número inteiro estritamente positivo e menor ou igual à `lotacao` cadastrada para a sala em `public.salas`.
+- Caso exceda a capacidade, o banco de dados rejeita a operação com o erro: `"A lotação máxima permitida para este espaço é de X pessoas."`.
+- Atualiza a RPC `solicitar_reserva` com validação de payload nativa pré-inserção.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -202,7 +215,8 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 - **Bloqueio por status do recurso** (`RecursoAgenda.tsx`): se a sala/equipamento estiver `ocupado` ou `manutencao`, a grade de horários nem aparece — mostra um aviso e não permite solicitar reserva, independentemente do horário.
 - **Manutenção programada por período**: o administrador escolhe o início e o fim da interdição e informa uma justificativa obrigatória. A faixa aparece destacada no calendário, impede novas solicitações e, após revisão, cancela e notifica reservas ativas que coincidam com o intervalo.
 - **Interdição emergencial**: o administrador escolhe a data e um ou mais turnos (manhã, tarde e noite), informa uma justificativa pública e revisa os usuários afetados. Na confirmação, os períodos são bloqueados, todas as reservas ativas são marcadas como “Cancelada pela Administração” e os usuários recebem alertas automáticos — tudo na mesma transação.
-- **Lotação de sala**: ao reservar uma sala, o formulário pede a quantidade de pessoas; se exceder a `lotacao` cadastrada, o botão de confirmar fica desabilitado e aparece o aviso.
+- **Lotação máxima de sala**: o formulário de reserva exibe de forma visível a capacidade máxima permitida daquele recurso. O campo "Quantidade de pessoas / Ocupantes" aceita apenas números inteiros maiores que zero. Se o número informado for superior à capacidade da sala, o botão de submissão é desabilitado com o erro exato: *"A lotação máxima permitida para este espaço é de X pessoas."*, com validação dupla na interface e no banco de dados.
+- **Justificativa obrigatória na recusa de reserva**: o painel de aprovações exige o preenchimento de uma justificativa formal ao recusar uma solicitação pendente, visível no histórico do usuário.
 - **Acessórios opcionais da sala**: o formulário lista somente itens com estoque disponível no período, permite escolher quantidades e envia sala + acessórios atomicamente. O histórico apresenta os itens vinculados em um único resumo.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
@@ -217,15 +231,12 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 
 ## Painel do administrador
 
-- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status), manutenção programada por intervalo e interdição emergencial por data e turnos
-- `/admin/aprovacoes` — fila de solicitações pendentes, com **aviso visual em tempo real** (Supabase Realtime nas tabelas `reservas_salas`/`reservas_equipamentos`) quando chega uma nova solicitação ou uma reserva muda de status
-- `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status
-- `/admin/usuarios` — pré-cadastro de alunos/administradores + lista de pendentes e contas ativas
-- `/admin/dashboard` — métricas (reservas concluídas por semana, % de ocupação por recurso)
-
-## Removido nesta versão
-
-A aba **Planos/Monetização simulada** foi retirada do app, conforme solicitado.
+- `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status), manutenção programada por intervalo, interdição emergencial por data e turnos e trava de limite de salas do plano Grátis.
+- `/admin/aprovacoes` — fila de solicitações pendentes, com **aviso visual em tempo real** e recusa justificada obrigatória.
+- `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status.
+- `/admin/usuarios` — pré-cadastro de alunos/administradores com trava de limite de 1 administrador no plano Grátis.
+- `/admin/dashboard` — métricas (reservas concluídas por semana, % de ocupação por recurso).
+- `/admin/planos` — tela de gestão de planos (Grátis vs Premium R$ 19,90/mês) e simulação de upgrades/downgrades de assinatura (*Feature Gating*).
 
 ## Observação sobre RLS pública em reservas
 
