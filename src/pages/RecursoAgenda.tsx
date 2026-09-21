@@ -394,9 +394,16 @@ export function RecursoAgenda() {
   async function confirmarReserva() {
     if (!pendingSlot || !user || !tipo || !recurso || meuIdUsuario === null) return
 
-    if (tipo === 'sala' && qtdPessoas > (recurso as Sala).lotacao) {
-      setFormErro(`A quantidade de pessoas (${qtdPessoas}) excede a lotação máxima da sala (${(recurso as Sala).lotacao}).`)
-      return
+    if (tipo === 'sala') {
+      const lotacao = (recurso as Sala).lotacao
+      if (!Number.isInteger(qtdPessoas) || qtdPessoas < 1) {
+        setFormErro('Informe um número inteiro maior que zero.')
+        return
+      }
+      if (qtdPessoas > lotacao) {
+        setFormErro(`A lotação máxima permitida para este espaço é de ${lotacao} pessoas.`)
+        return
+      }
     }
 
     if (tipo === 'equipamento' && qtdEquipamento > disponivelNoSlot) {
@@ -736,6 +743,12 @@ export function RecursoAgenda() {
                   {pendingSlot.inicio.toLocaleDateString('pt-BR')} · {pendingSlot.inicio.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {pendingSlot.fim.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                 </p>
                 {tipo === 'sala' && (
+                  <p className="mt-1 text-sm font-sans text-(--color-ink)">
+                    <span className="text-(--color-ink-soft)">Capacidade máxima permitida: </span>
+                    <strong className="font-semibold text-(--color-cyan)">{(recurso as Sala).lotacao} pessoas</strong>
+                  </p>
+                )}
+                {tipo === 'sala' && (
                   <p className="mt-2 border-t border-(--color-border) pt-2">
                     <span className="text-(--color-ink-soft)">Acessórios: </span>
                     {acessoriosNoResumo.length > 0
@@ -752,18 +765,29 @@ export function RecursoAgenda() {
                     <input value={motivo} onChange={(e) => setMotivo(e.target.value)} className="input" placeholder="Ex: reunião de projeto" />
                   </label>
                   <label className="block">
-                    <span className="mb-1 block text-sm font-medium">
-                      Quantidade de pessoas <span className="font-mono text-xs text-(--color-ink-soft)">(lotação máx.: {(recurso as Sala).lotacao})</span>
+                    <span className="mb-1 flex items-center justify-between text-sm font-medium">
+                      <span>Quantidade de pessoas / Ocupantes</span>
+                      <span className="font-mono text-xs text-(--color-ink-soft)">
+                        (lotação máx.: {(recurso as Sala).lotacao} pessoas)
+                      </span>
                     </span>
                     <input
                       type="number"
                       min={1}
+                      step={1}
                       value={qtdPessoas}
                       onChange={(e) => setQtdPessoas(Number(e.target.value))}
                       className="input"
                     />
+                    {(!Number.isInteger(qtdPessoas) || qtdPessoas < 1) && (
+                      <span className="mt-1 block text-xs text-(--color-coral)">
+                        Informe um número inteiro maior que zero.
+                      </span>
+                    )}
                     {qtdPessoas > (recurso as Sala).lotacao && (
-                      <span className="mt-1 block text-xs text-(--color-coral)">Excede a lotação máxima da sala.</span>
+                      <span className="mt-1 block text-xs text-(--color-coral)">
+                        A lotação máxima permitida para este espaço é de {(recurso as Sala).lotacao} pessoas.
+                      </span>
                     )}
                   </label>
 
@@ -903,7 +927,7 @@ export function RecursoAgenda() {
                     enviando ||
                     (tipo === 'sala' && carregandoAcessorios) ||
                     (recurso.regras_uso && !aceitouRegras) ||
-                    (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || qtdPessoas < 1)) ||
+                    (tipo === 'sala' && (qtdPessoas > (recurso as Sala).lotacao || !Number.isInteger(qtdPessoas) || qtdPessoas < 1)) ||
                     (tipo === 'sala' && acessoriosNoResumo.some((item) =>
                       !Number.isInteger(item.quantidadeSelecionada) ||
                       item.quantidadeSelecionada < 1 ||
