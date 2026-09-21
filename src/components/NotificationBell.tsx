@@ -17,13 +17,14 @@ export function NotificationBell() {
   const [piscar, setPiscar] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // Busca solicitações pendentes para Admin
+  // Busca solicitações pendentes para Admin (incluindo avarias)
   const contarPendentesAdmin = useCallback(async () => {
-    const [rs, re] = await Promise.all([
+    const [rs, re, ra] = await Promise.all([
       supabase.from('reservas_salas').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
       supabase.from('reservas_equipamentos').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
+      supabase.from('relatos_avarias').select('id', { count: 'exact', head: true }).eq('status', 'pendente'),
     ])
-    setPendentes((rs.count ?? 0) + (re.count ?? 0))
+    setPendentes((rs.count ?? 0) + (re.count ?? 0) + (ra.count ?? 0))
   }, [])
 
   // Busca avisos para Aluno
@@ -70,6 +71,10 @@ export function NotificationBell() {
           setPiscar(true)
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'reservas_equipamentos' }, () => {
+          contarPendentesAdmin()
+          setPiscar(true)
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'relatos_avarias' }, () => {
           contarPendentesAdmin()
           setPiscar(true)
         })

@@ -108,6 +108,20 @@ A migração:
 - Cria a função `public.calcular_horas_semana_usuario` que calcula a soma das durações das reservas do aluno na semana vigente (segunda a domingo, via `date_trunc('week')`).
 - Cria triggers `trg_validar_teto_semanal_reserva_equip` e `trg_validar_teto_semanal_reserva_sala` que impedem reservas ativas cujo somatório de horas semanais para o recurso ultrapasse a cota de **4 horas semanais por aluno**, rejeitando no banco com aviso explicativo.
 
+### ⚠️ Reporte de Defeitos e Avarias em Recursos Utilizados
+
+Para permitir que alunos e pesquisadores reportem ocorrências, defeitos ou avarias logo após a utilização de uma sala ou equipamento, aplique:
+
+```text
+supabase/sql/relatos_avarias.sql
+```
+
+A migração:
+- Cria os tipos enumerados `severidade_avaria` (`'leve'`, `'media'`, `'critica'`) e `status_avaria` (`'pendente'`, `'em_analise'`, `'resolvido'`).
+- Cria a tabela `public.relatos_avarias` com vínculos para o usuário, recurso e reservas associadas.
+- Aplica políticas RLS completas (usuários autenticados criam relatos e consultam os seus; administradores visualizam e gerenciam todos os relatos).
+- Adiciona `public.relatos_avarias` à publicação `supabase_realtime` para envio de notificações imediatas ao painel e sininho do administrador.
+
 ## Stack
 
 React 19 + TypeScript + Vite · Tailwind CSS v4 · React Router · `@supabase/supabase-js` · Recharts
@@ -187,12 +201,28 @@ erDiagram
         boolean cancelada_por_administracao
         text justificativa_cancelamento
     }
+    relatos_avarias {
+        bigint id PK
+        bigint id_usuario FK
+        tipo_recurso tipo_recurso
+        bigint id_recurso
+        text recurso_nome
+        bigint id_reserva_sala FK
+        bigint id_reserva_equipamento FK
+        severidade_avaria severidade
+        text descricao
+        status_avaria status
+        timestamptz criado_em
+    }
 
     usuarios ||--o{ reservas_salas : "realiza"
     usuarios ||--o{ reservas_equipamentos : "realiza"
+    usuarios ||--o{ relatos_avarias : "reporta"
     salas ||--o{ reservas_salas : "reservada_em"
     equipamentos ||--o{ reservas_equipamentos : "reservado_em"
     reservas_salas ||--o{ reservas_equipamentos : "inclui_acessorio"
+    reservas_salas ||--o{ relatos_avarias : "origina_defeito"
+    reservas_equipamentos ||--o{ relatos_avarias : "origina_defeito"
     administradores ||--o{ reservas_salas : "gerencia"
     administradores ||--o{ reservas_equipamentos : "gerencia"
     salas ||--o{ bloqueios_manutencao : "interditada_em"
@@ -230,6 +260,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 - **Lotação máxima de sala**: o formulário de reserva exibe de forma visível a capacidade máxima permitida daquele recurso. O campo "Quantidade de pessoas / Ocupantes" aceita apenas números inteiros maiores que zero. Se o número informado for superior à capacidade da sala, o botão de submissão é desabilitado com o erro exato: *"A lotação máxima permitida para este espaço é de X pessoas."*, com validação dupla na interface e no banco de dados.
 - **Justificativa obrigatória na recusa de reserva**: o painel de aprovações exige o preenchimento de uma justificativa formal ao recusar uma solicitação pendente, visível no histórico do usuário.
 - **Teto semanal de horas em recursos concorridos**: O sistema contabiliza as horas agendadas pelo aluno na semana vigente (segunda a domingo). Se uma nova solicitação ultrapassar o teto configurado (máx. 4h semanais por recurso), o envio é imediatamente bloqueado no modal com aviso explicativo detalhando as horas já agendadas e a duração do pedido, com validação preventiva na interface e no banco de dados.
+- **Reporte de defeito/avaria pós-uso**: Em reservas concluídas (`MinhasReservas.tsx`), o aluno visualiza o botão *"Reportar problema/avaria"*. Um modal permite selecionar a severidade (**Leve**, **Média**, **Crítica**) e detalhar a ocorrência. O envio dispara notificação imediata ao painel e sininho do administrador com atualização em tempo real.
 - **Acessórios opcionais da sala**: o formulário lista somente itens com estoque disponível no período, permite escolher quantidades e envia sala + acessórios atomicamente. O histórico apresenta os itens vinculados em um único resumo.
 - **Conflito de horário e cliques simultâneos**: Verificação pré-persistência em tempo real + bloqueio pessimista via locks/triggers e `EXCLUDE CONSTRAINT` (PostgreSQL `23P01`), garantindo que apenas a primeira requisição seja confirmada e o segundo usuário receba o aviso imediato: *"Este horário acabou de ser reservado por outro usuário. Por favor, escolha outro período."*
 
@@ -245,7 +276,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 ## Painel do administrador
 
 - `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status), manutenção programada por intervalo, interdição emergencial por data e turnos e trava de limite de salas do plano Grátis.
-- `/admin/aprovacoes` — fila de solicitações pendentes, com **aviso visual em tempo real** e recusa justificada obrigatória.
+- `/admin/aprovacoes` — fila de solicitações pendentes, acompanhamento de devoluções de equipamentos e **Aba de Avarias Reportadas**, com **notificação e atualização em tempo real** e ações para alterar status (Em análise, Resolvido).
 - `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status.
 - `/admin/usuarios` — pré-cadastro de alunos/administradores com trava de limite de 1 administrador no plano Grátis.
 - `/admin/dashboard` — métricas (reservas concluídas por semana, % de ocupação por recurso).

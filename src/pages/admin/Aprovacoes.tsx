@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Modal } from '../../components/Modal'
+import type { RelatoAvaria, StatusAvaria } from '../../lib/types'
 
 interface Solicitacao {
   id: number
@@ -25,11 +26,13 @@ interface Solicitacao {
 
 export function AdminAprovacoes() {
   const { meuIdAdm } = useAuth()
-  const [aba, setAba] = useState<'pendentes' | 'devolucao'>('pendentes')
+  const [aba, setAba] = useState<'pendentes' | 'devolucao' | 'avarias'>('pendentes')
   const [itens, setItens] = useState<Solicitacao[]>([])
   const [devolucoes, setDevolucoes] = useState<Solicitacao[]>([])
+  const [avarias, setAvarias] = useState<RelatoAvaria[]>([])
   const [loading, setLoading] = useState(true)
   const [processando, setProcessando] = useState<number | null>(null)
+  const [processandoAvaria, setProcessandoAvaria] = useState<number | null>(null)
   const [rejeitando, setRejeitando] = useState<Solicitacao | null>(null)
   const [justificativa, setJustificativa] = useState('')
   const [erroJustificativa, setErroJustificativa] = useState<string | null>(null)
@@ -38,7 +41,7 @@ export function AdminAprovacoes() {
   async function carregar() {
     setLoading(true)
 
-    const [resSalas, resEquip, resDevolucoes, resListaSalas, resListaEquip] = await Promise.all([
+    const [resSalas, resEquip, resDevolucoes, resAvarias, resListaSalas, resListaEquip] = await Promise.all([
       // 1. Salas pendentes de aprovação
       supabase
         .from('reservas_salas')
@@ -60,6 +63,12 @@ export function AdminAprovacoes() {
         .eq('status', 'aprovada')
         .eq('status_devolucao', 'pendente')
         .order('inicio', { ascending: true }),
+
+      // 4. Avarias e defeitos reportados
+      supabase
+        .from('relatos_avarias')
+        .select('id, id_usuario, tipo_recurso, id_recurso, recurso_nome, id_reserva_sala, id_reserva_equipamento, severidade, descricao, status, criado_em, usuarios(nome, email, matricula)')
+        .order('criado_em', { ascending: false }),
 
       supabase.from('salas').select('id_sala, nome'),
       supabase.from('equipamentos').select('id, nome'),
@@ -132,8 +141,30 @@ export function AdminAprovacoes() {
         : undefined,
     }))
 
+    const avariasFormatadas: RelatoAvaria[] = (resAvarias.data ?? []).map((a: any) => ({
+      id: a.id,
+      id_usuario: a.id_usuario,
+      tipo_recurso: a.tipo_recurso,
+      id_recurso: a.id_recurso,
+      recurso_nome: a.recurso_nome,
+      id_reserva_sala: a.id_reserva_sala,
+      id_reserva_equipamento: a.id_reserva_equipamento,
+      severidade: a.severidade,
+      descricao: a.descricao,
+      status: a.status,
+      criado_em: a.criado_em,
+      usuarios: a.usuarios
+        ? {
+            nome: a.usuarios.nome,
+            email: a.usuarios.email,
+            matricula: a.usuarios.matricula,
+          }
+        : undefined,
+    }))
+
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(a.inicio).getTime() - new Date(b.inicio).getTime()))
     setDevolucoes(devolucoesEquip)
+    setAvarias(avariasFormatadas)
     setLoading(false)
     setNovaSolicitacao(false)
   }
@@ -147,12 +178,29 @@ export function AdminAprovacoes() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservas_equipamentos' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservas_salas' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservas_equipamentos' }, () => setNovaSolicitacao(true))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'relatos_avarias' }, () => setNovaSolicitacao(true))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'relatos_avarias' }, () => setNovaSolicitacao(true))
       .subscribe()
 
     return () => {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  async function alterarStatusAvaria(id: number, novoStatus: StatusAvaria) {
+    setProcessandoAvaria(id)
+    const { error } = await supabase
+      .from('relatos_avarias')
+      .update({ status: novoStatus })
+      .eq('id', id)
+
+    setProcessandoAvaria(null)
+    if (error) {
+      alert('Erro ao atualizar status da avaria: ' + error.message)
+    } else {
+      carregar()
+    }
+  }
 
   async function aprovar(item: Solicitacao) {
     setProcessando(item.id)
@@ -272,7 +320,7 @@ export function AdminAprovacoes() {
         )}
       </div>
 
-      <div className="mb-6 mt-4 flex gap-2">
+      <div className="mb-6 mt-4 flex flex-wrap gap-2">
         <button
           onClick={() => setAba('pendentes')}
           className={`chip ${aba === 'pendentes' ? 'chip-on' : ''}`}
@@ -284,6 +332,12 @@ export function AdminAprovacoes() {
           className={`chip ${aba === 'devolucao' ? 'chip-on' : ''}`}
         >
           Pedidos para devolução ({devolucoes.length})
+        </button>
+        <button
+          onClick={() => setAba('avarias')}
+          className={`chip ${aba === 'avarias' ? 'chip-on' : ''}`}
+        >
+          Avarias reportadas ({avarias.filter((a) => a.status !== 'resolvido').length})
         </button>
       </div>
 
@@ -342,46 +396,132 @@ export function AdminAprovacoes() {
             ))}
           </div>
         )
-      ) : devolucoes.length === 0 ? (
+      ) : aba === 'devolucao' ? (
+        devolucoes.length === 0 ? (
+          <p className="empty">
+            Nenhum equipamento em uso aguardando devolução.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {devolucoes.map((item) => (
+              <div key={`devolucao-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-5">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">equipamento</span>
+                    <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
+                  </div>
+                  <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
+
+                  <p className="text-xs text-(--color-ink-soft)">
+                    {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
+                    {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
+                    {item.usuarioEmail && <span>E-mail: {item.usuarioEmail}</span>}
+                  </p>
+
+                  <p className="mt-1 text-sm text-(--color-ink-soft)">
+                    {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                  {item.salaVinculada && (
+                    <p className="mt-1 text-sm text-(--color-ink-soft)">
+                      <span className="font-medium text-(--color-ink)">Acessório de: </span>{item.salaVinculada}
+                    </p>
+                  )}
+                  {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
+                </div>
+                <button
+                  onClick={() => marcarDevolvido(item)}
+                  disabled={processando === item.id}
+                  className="btn-primary bg-(--color-cyan) hover:bg-(--color-cyan)"
+                >
+                  {processando === item.id ? 'salvando…' : 'devolvido'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )
+      ) : avarias.length === 0 ? (
         <p className="empty">
-          Nenhum equipamento em uso aguardando devolução.
+          Nenhum relato de defeito ou avaria registrado. Tudo em ordem! ✓
         </p>
       ) : (
         <div className="space-y-3">
-          {devolucoes.map((item) => (
-            <div key={`devolucao-${item.id}`} className="card flex flex-wrap items-center justify-between gap-4 p-5">
-              <div>
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">equipamento</span>
-                  <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
-                </div>
-                <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
+          {avarias.map((avaria) => {
+            const severidadeBadge = {
+              leve: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+              media: 'border-(--color-amber)/30 bg-(--color-amber-soft) text-(--color-amber)',
+              critica: 'border-(--color-coral)/30 bg-rose-500/10 text-(--color-coral)',
+            }[avaria.severidade]
 
-                <p className="text-xs text-(--color-ink-soft)">
-                  {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
-                  {item.usuarioMatricula && item.usuarioEmail && <span> · </span>}
-                  {item.usuarioEmail && <span>E-mail: {item.usuarioEmail}</span>}
-                </p>
+            const statusBadge = {
+              pendente: 'border-(--color-amber)/30 bg-(--color-amber-soft) text-(--color-amber)',
+              em_analise: 'border-(--color-cyan)/30 bg-(--color-cyan-soft) text-(--color-cyan)',
+              resolvido: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+            }[avaria.status]
 
-                <p className="mt-1 text-sm text-(--color-ink-soft)">
-                  {new Date(item.inicio).toLocaleDateString('pt-BR')} · {new Date(item.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} – {new Date(item.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-                {item.salaVinculada && (
-                  <p className="mt-1 text-sm text-(--color-ink-soft)">
-                    <span className="font-medium text-(--color-ink)">Acessório de: </span>{item.salaVinculada}
+            return (
+              <div key={`avaria-${avaria.id}`} className="card flex flex-wrap items-start justify-between gap-4 p-5">
+                <div className="max-w-2xl space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">
+                      {avaria.tipo_recurso}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${severidadeBadge}`}>
+                      Severidade: {avaria.severidade}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize ${statusBadge}`}>
+                      {avaria.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <p className="font-semibold text-base">
+                    {avaria.recurso_nome}
                   </p>
-                )}
-                {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
+
+                  <p className="text-xs text-(--color-ink-soft)">
+                    Reportado por: <span className="font-medium text-(--color-ink)">{avaria.usuarios?.nome ?? 'Usuário'}</span>
+                    {avaria.usuarios?.matricula && <span> · Matrícula: {avaria.usuarios.matricula}</span>}
+                    {avaria.usuarios?.email && <span> · {avaria.usuarios.email}</span>}
+                    <span> · {new Date(avaria.criado_em).toLocaleString('pt-BR')}</span>
+                  </p>
+
+                  <div className="rounded-md border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] p-3 text-sm">
+                    <p className="font-medium text-xs text-(--color-ink-soft) mb-1 uppercase tracking-wider">Descrição da ocorrência:</p>
+                    <p className="whitespace-pre-wrap">{avaria.descricao}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  {avaria.status === 'pendente' && (
+                    <button
+                      onClick={() => alterarStatusAvaria(avaria.id, 'em_analise')}
+                      disabled={processandoAvaria === avaria.id}
+                      className="btn-secondary text-xs"
+                    >
+                      {processandoAvaria === avaria.id ? 'salvando…' : 'Marcar em análise'}
+                    </button>
+                  )}
+                  {avaria.status !== 'resolvido' && (
+                    <button
+                      onClick={() => alterarStatusAvaria(avaria.id, 'resolvido')}
+                      disabled={processandoAvaria === avaria.id}
+                      className="btn-primary bg-emerald-600 hover:bg-emerald-700 text-xs"
+                    >
+                      {processandoAvaria === avaria.id ? 'salvando…' : 'Marcar resolvido'}
+                    </button>
+                  )}
+                  {avaria.status === 'resolvido' && (
+                    <button
+                      onClick={() => alterarStatusAvaria(avaria.id, 'pendente')}
+                      disabled={processandoAvaria === avaria.id}
+                      className="btn-secondary text-xs"
+                    >
+                      Reabrir ocorrência
+                    </button>
+                  )}
+                </div>
               </div>
-              <button
-                onClick={() => marcarDevolvido(item)}
-                disabled={processando === item.id}
-                className="btn-primary bg-(--color-cyan) hover:bg-(--color-cyan)"
-              >
-                {processando === item.id ? 'salvando…' : 'devolvido'}
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

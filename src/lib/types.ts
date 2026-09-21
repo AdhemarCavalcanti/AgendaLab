@@ -94,3 +94,25 @@ export interface Notificacao {
   lida: boolean
   criado_em: string
 }
+
+export type SeveridadeAvaria = 'leve' | 'media' | 'critica'
+export type StatusAvaria = 'pendente' | 'em_analise' | 'resolvido'
+
+export interface RelatoAvaria {
+  id: number
+  id_usuario: number
+  tipo_recurso: TipoRecurso
+  id_recurso: number
+  recurso_nome?: string | null
+  id_reserva_sala?: number | null
+  id_reserva_equipamento?: number | null
+  severidade: SeveridadeAvaria
+  descricao: string
+  status: StatusAvaria
+  criado_em: string
+  usuarios?: {
+    nome: string
+    email: string
+    matricula: string | null
+  }
+}
