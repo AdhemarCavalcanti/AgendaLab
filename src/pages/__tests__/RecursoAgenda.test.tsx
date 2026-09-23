@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { RecursoAgenda } from '../RecursoAgenda'
@@ -85,6 +85,7 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    localStorage.removeItem('agendalab_plano')
   })
 
   it('exibe mensagem e bloqueia agendamento quando recurso está em manutenção', async () => {
@@ -261,11 +262,146 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
     expect(btnConfirmar).toBeDisabled()
 
     // Marca o checkbox de regras
-    const checkboxRegras = screen.getByRole('checkbox')
+    const checkboxRegras = screen.getByRole('checkbox', { name: /Declaro que li e concordo/i })
     await user.click(checkboxRegras)
 
     // Agora deve estar habilitado
     expect(btnConfirmar).not.toBeDisabled()
+  })
+
+  it('envia quatro reservas semanais em uma única RPC com a data de término', async () => {
+    const user = userEvent.setup()
+    setupAuth('aluno', 1)
+    localStorage.setItem('agendalab_plano', 'premium')
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 3, nome: 'Laboratório', lotacao: 20, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      return criarConsultaVazia()
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: { sucesso: true, quantidade: 4, ids: [1, 2, 3, 4] },
+      error: null,
+    } as any)
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/3']}>
+        <Routes><Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} /></Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Laboratório')).toBeInTheDocument()
+    const slot = (await screen.findAllByRole('button')).find((button) => button.textContent?.includes('15:00 – 16:00'))
+    await user.click(slot!)
+    await user.click(screen.getByRole('button', { name: /solicitar reserva/i }))
+    await user.click(screen.getByRole('checkbox', { name: 'Repetir semanalmente' }))
+
+    expect(screen.getByLabelText('Data de término')).toHaveValue('2026-10-02')
+    expect(screen.getByText(/4 reservas no mesmo dia da semana/i)).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Data de término'), { target: { value: '2026-09-17' } })
+    expect(screen.getByRole('button', { name: /confirmar solicitação/i })).toBeDisabled()
+    expect(supabase.rpc).not.toHaveBeenCalled()
+
+    fireEvent.change(screen.getByLabelText('Data de término'), { target: { value: '2026-10-02' } })
+    await user.click(screen.getByRole('button', { name: /confirmar solicitação/i }))
+
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledTimes(1)
+      expect(supabase.rpc).toHaveBeenCalledWith('solicitar_reservas_semanais', expect.objectContaining({
+        p_tipo: 'sala',
+        p_id_recurso: 3,
+        p_data_termino: '2026-10-02',
+      }))
+    })
+    expect(await screen.findByText(/4 solicitações enviadas/i)).toBeInTheDocument()
+  })
+
+  it('mostra a data indisponível da série e mantém o formulário aberto', async () => {
+    const user = userEvent.setup()
+    setupAuth('aluno', 1)
+    localStorage.setItem('agendalab_plano', 'premium')
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 3, nome: 'Laboratório', lotacao: 20, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      return criarConsultaVazia()
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: null,
+      error: { code: '23P01', message: 'Série indisponível em 25/09/2026: sala já reservada.' },
+    } as any)
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/3']}>
+        <Routes><Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} /></Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Laboratório')).toBeInTheDocument()
+    const slot = (await screen.findAllByRole('button')).find((button) => button.textContent?.includes('15:00 – 16:00'))
+    await user.click(slot!)
+    await user.click(screen.getByRole('button', { name: /solicitar reserva/i }))
+    await user.click(screen.getByRole('checkbox', { name: 'Repetir semanalmente' }))
+    await user.click(screen.getByRole('button', { name: /confirmar solicitação/i }))
+
+    expect(await screen.findByText('Série indisponível em 25/09/2026: sala já reservada.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /confirmar solicitação/i })).toBeEnabled()
+  })
+
+  it('não cria reservas avulsas se a RPC de repetição ainda não estiver instalada', async () => {
+    const user = userEvent.setup()
+    setupAuth('aluno', 1)
+    localStorage.setItem('agendalab_plano', 'premium')
+    const insert = vi.fn()
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 3, nome: 'Laboratório', lotacao: 20, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      return { ...criarConsultaVazia(), insert }
+    })
+    vi.mocked(supabase.rpc).mockResolvedValue({
+      data: null,
+      error: { code: '42883', message: 'function public.solicitar_reservas_semanais not found' },
+    } as any)
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/3']}>
+        <Routes><Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} /></Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Laboratório')).toBeInTheDocument()
+    const slot = (await screen.findAllByRole('button')).find((button) => button.textContent?.includes('15:00 – 16:00'))
+    await user.click(slot!)
+    await user.click(screen.getByRole('button', { name: /solicitar reserva/i }))
+    await user.click(screen.getByRole('checkbox', { name: 'Repetir semanalmente' }))
+    await user.click(screen.getByRole('button', { name: /confirmar solicitação/i }))
+
+    expect(await screen.findByText('A repetição semanal ainda não foi habilitada no banco de dados.')).toBeInTheDocument()
+    expect(insert).not.toHaveBeenCalled()
   })
 
   it('valida e bloqueia envio quando quantidade de pessoas excede a lotação da sala ou não é inteiro positivo', async () => {

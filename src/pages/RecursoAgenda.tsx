@@ -20,6 +20,25 @@ function proximosDias(n: number) {
   return dias
 }
 
+function dataLocalISO(data: Date) {
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`
+}
+
+function somarDias(data: Date, dias: number) {
+  const resultado = new Date(data)
+  resultado.setDate(resultado.getDate() + dias)
+  return resultado
+}
+
+function contarOcorrenciasSemanais(inicio: Date, termino: string) {
+  const [ano, mes, dia] = termino.split('-').map(Number)
+  if (!ano || !mes || !dia) return 0
+  const fim = new Date(ano, mes - 1, dia)
+  if (dataLocalISO(fim) !== termino) return 0
+  const dias = Math.round((Date.UTC(ano, mes - 1, dia) - Date.UTC(inicio.getFullYear(), inicio.getMonth(), inicio.getDate())) / 86400000)
+  return Math.floor(dias / 7) + 1
+}
+
 const STATUS_MSG: Record<string, string> = {
   ocupado: 'Este recurso está marcado como ocupado pelo administrador e não pode ser reservado no momento.',
   manutencao: 'Este recurso está em manutenção e não pode ser reservado no momento.',
@@ -155,6 +174,8 @@ export function RecursoAgenda() {
   const [qtdPessoas, setQtdPessoas] = useState(1)
   const [qtdEquipamento, setQtdEquipamento] = useState(1)
   const [observacao, setObservacao] = useState('')
+  const [repetirSemanalmente, setRepetirSemanalmente] = useState(false)
+  const [dataTermino, setDataTermino] = useState('')
   const [aceitouRegras, setAceitouRegras] = useState(false)
   const [enviando, setEnviando] = useState(false)
   const [formErro, setFormErro] = useState<string | null>(null)
@@ -431,6 +452,8 @@ export function RecursoAgenda() {
     setQtdEquipamento(1)
     setAceitouRegras(false)
     setAcessoriosSelecionados({})
+    setRepetirSemanalmente(false)
+    setDataTermino('')
     if (tipo === 'sala') setCarregandoAcessorios(true)
     if (meuIdUsuario && tipo && idNum) {
       const horas = await obterHorasSemanaUsuario(meuIdUsuario, tipo, idNum, inicio)
@@ -445,6 +468,12 @@ export function RecursoAgenda() {
     return Math.round(horas * 10) / 10
   }, [pendingSlot])
 
+  const dataTerminoMinima = pendingSlot ? dataLocalISO(somarDias(pendingSlot.inicio, 7)) : ''
+  const dataTerminoMaxima = pendingSlot ? dataLocalISO(somarDias(pendingSlot.inicio, 357)) : ''
+  const quantidadeOcorrencias = pendingSlot ? contarOcorrenciasSemanais(pendingSlot.inicio, dataTermino) : 0
+  const repeticaoInvalida = repetirSemanalmente &&
+    (!dataTermino || dataTermino < dataTerminoMinima || dataTermino > dataTerminoMaxima || quantidadeOcorrencias < 2)
+
   const limiteHorasExcedido = useMemo(() => {
     if (role !== 'aluno' || !pendingSlot) return false
     return (horasSemanaUsuario + duracaoHorasSlot) > TETO_HORAS_SEMANAIS
@@ -452,6 +481,11 @@ export function RecursoAgenda() {
 
   async function confirmarReserva() {
     if (!pendingSlot || !user || !tipo || !recurso || meuIdUsuario === null) return
+
+    if (repeticaoInvalida) {
+      setFormErro('Informe uma data de término entre a semana seguinte e 52 semanas de reservas.')
+      return
+    }
 
     if (role === 'aluno' && limiteHorasExcedido) {
       setFormErro(
@@ -498,11 +532,13 @@ export function RecursoAgenda() {
 
     if (role === 'aluno' && !planoEhPremium()) {
       const uso = await obterUsoReservasUsuario(meuIdUsuario)
-      if (uso.reservasNoMes >= LIMITE_RESERVAS_MENSAIS_GRATIS) {
+      const novasReservas = repetirSemanalmente ? quantidadeOcorrencias : 1
+      const novosRegistros = novasReservas * (1 + acessoriosPayload.length)
+      if (uso.reservasNoMes + novosRegistros > LIMITE_RESERVAS_MENSAIS_GRATIS) {
         setFormErro(`Limite de ${LIMITE_RESERVAS_MENSAIS_GRATIS} reservas mensais do plano gratuito atingido.`)
         return
       }
-      if (tipo === 'sala' && uso.salasAtivas >= LIMITE_SALAS_ATIVAS_GRATIS) {
+      if (tipo === 'sala' && uso.salasAtivas + novasReservas > LIMITE_SALAS_ATIVAS_GRATIS) {
         setFormErro(
           `Limite de ${LIMITE_SALAS_ATIVAS_GRATIS} salas reservadas do plano gratuito atingido. Cancele uma reserva ou faça upgrade.`
         )
@@ -583,7 +619,7 @@ export function RecursoAgenda() {
     }
 
     // 2. Tenta invocar a RPC com bloqueio pessimista (FOR UPDATE)
-    const { error: rpcError } = await supabase.rpc('solicitar_reserva', {
+    const { error: rpcError } = await supabase.rpc(repetirSemanalmente ? 'solicitar_reservas_semanais' : 'solicitar_reserva', {
       p_tipo: tipo,
       p_id_recurso: idNum,
       p_id_usuario: meuIdUsuario,
@@ -594,6 +630,7 @@ export function RecursoAgenda() {
       p_quantidade_equipamento: tipo === 'equipamento' ? qtdEquipamento : null,
       p_observacao: observacao || null,
       p_acessorios: acessoriosPayload,
+      ...(repetirSemanalmente ? { p_data_termino: dataTermino } : {}),
     })
 
     if (!rpcError) {
@@ -609,6 +646,8 @@ export function RecursoAgenda() {
         setQtdPessoas(1)
         setQtdEquipamento(1)
         setAcessoriosSelecionados({})
+        setRepetirSemanalmente(false)
+        setDataTermino('')
       }, 1600)
       return
     }
@@ -624,7 +663,9 @@ export function RecursoAgenda() {
 
     if (isErroConcorrencia(rpcError)) {
       setEnviando(false)
-      setFormErro(acessoriosPayload.length > 0 ? MSG_CONFLITO_ACESSORIO : MSG_CONFLITO_CONCORRENCIA)
+      setFormErro(repetirSemanalmente && rpcError.message?.startsWith('Série indisponível em ')
+        ? rpcError.message
+        : acessoriosPayload.length > 0 ? MSG_CONFLITO_ACESSORIO : MSG_CONFLITO_CONCORRENCIA)
       await carregarOcupacoes()
       if (tipo === 'sala') await carregarAcessorios(pendingSlot.inicio, pendingSlot.fim)
       return
@@ -637,6 +678,11 @@ export function RecursoAgenda() {
       rpcError.code === '42883'
 
     if (isRpcNaoExiste) {
+      if (repetirSemanalmente) {
+        setEnviando(false)
+        setFormErro('A repetição semanal ainda não foi habilitada no banco de dados.')
+        return
+      }
       if (acessoriosPayload.length > 0) {
         setEnviando(false)
         setFormErro('A reserva conjunta de acessórios ainda não foi habilitada no banco de dados.')
@@ -823,7 +869,8 @@ export function RecursoAgenda() {
         <Modal title="Confirmar solicitação de reserva" onClose={() => !enviando && setPendingSlot(null)}>
           {sucesso ? (
             <p className="rounded-md border border-(--color-green)/30 bg-(--color-green-soft) px-3 py-3 text-sm text-(--color-green)">
-              Solicitação enviada! Ela ficará com status <strong>Pendente</strong> até a aprovação de um administrador.
+              {repetirSemanalmente ? `${quantidadeOcorrencias} solicitações enviadas! ` : 'Solicitação enviada! '}
+              {repetirSemanalmente ? 'Elas ficarão' : 'Ela ficará'} com status <strong>Pendente</strong> até a aprovação de um administrador.
             </p>
           ) : (
             <div className="space-y-4">
@@ -852,6 +899,42 @@ export function RecursoAgenda() {
                   </p>
                 )}
               </div>
+
+              <fieldset className="rounded-md border border-(--color-border) p-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={repetirSemanalmente}
+                    onChange={(e) => {
+                      setRepetirSemanalmente(e.target.checked)
+                      setDataTermino(e.target.checked ? dataLocalISO(somarDias(pendingSlot.inicio, 21)) : '')
+                      setFormErro(null)
+                    }}
+                  />
+                  Repetir semanalmente
+                </label>
+                {repetirSemanalmente && (
+                  <div className="mt-3 space-y-2">
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Data de término</span>
+                      <input
+                        type="date"
+                        aria-label="Data de término"
+                        min={dataTerminoMinima}
+                        max={dataTerminoMaxima}
+                        value={dataTermino}
+                        onChange={(e) => setDataTermino(e.target.value)}
+                        className="input"
+                      />
+                    </label>
+                    <p className="text-xs text-(--color-ink-soft)">
+                      {repeticaoInvalida
+                        ? 'Escolha uma data a partir da próxima semana, com até 52 reservas.'
+                        : `${quantidadeOcorrencias} reservas no mesmo dia da semana e horário, incluindo a primeira. A data de término é inclusiva.`}
+                    </p>
+                  </div>
+                )}
+              </fieldset>
 
               {limiteHorasExcedido && (
                 <div className="rounded-md border border-(--color-coral)/30 bg-(--color-coral-soft) p-3 text-xs text-(--color-coral)">
@@ -1026,6 +1109,7 @@ export function RecursoAgenda() {
                   onClick={confirmarReserva}
                   disabled={
                     enviando ||
+                    repeticaoInvalida ||
                     limiteHorasExcedido ||
                     (tipo === 'sala' && carregandoAcessorios) ||
                     (recurso.regras_uso && !aceitouRegras) ||

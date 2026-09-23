@@ -108,6 +108,16 @@ A migração:
 - Cria a função `public.calcular_horas_semana_usuario` que calcula a soma das durações das reservas do aluno na semana vigente (segunda a domingo, via `date_trunc('week')`).
 - Cria triggers `trg_validar_teto_semanal_reserva_equip` e `trg_validar_teto_semanal_reserva_sala` que impedem reservas ativas cujo somatório de horas semanais para o recurso ultrapasse a cota de **4 horas semanais por aluno**, rejeitando no banco com aviso explicativo.
 
+### 🔁 Reservas semanais
+
+Para habilitar a opção **Repetir semanalmente** no formulário, aplique depois das migrações de acessórios, capacidade e teto semanal:
+
+```text
+supabase/sql/reservas_semanais.sql
+```
+
+A RPC `solicitar_reservas_semanais` aceita uma data de término inclusiva, valida todas as ocorrências e grava de 2 a 52 reservas em uma única transação. Se houver conflito, manutenção, estoque insuficiente ou alguma validação existente falhar, nenhuma reserva da série é criada. Cada ocorrência segue o fluxo normal de aprovação e cancelamento.
+
 ### ⚠️ Reporte de Defeitos e Avarias em Recursos Utilizados
 
 Para permitir que alunos e pesquisadores reportem ocorrências, defeitos ou avarias logo após a utilização de uma sala ou equipamento, aplique:
