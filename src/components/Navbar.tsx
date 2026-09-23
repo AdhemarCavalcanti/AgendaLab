@@ -36,7 +36,6 @@ export function Navbar() {
           <NavLink to="/admin/recursos" className={({ isActive }) => navClass(isActive)} onClick={() => setMenuAberto(false)}>
             recursos
           </NavLink>
-<<<<<<< Updated upstream
           <NavLink to="/admin/aprovacoes" className={({ isActive }) => navClass(isActive)} onClick={() => setMenuAberto(false)}>
             aprovações
           </NavLink>
@@ -48,6 +47,9 @@ export function Navbar() {
           </NavLink>
           <NavLink to="/admin/dashboard" className={({ isActive }) => navClass(isActive)} onClick={() => setMenuAberto(false)}>
             dashboard
+          </NavLink>
+          <NavLink to="/admin/acompanhamento" className={({ isActive }) => navClass(isActive)} onClick={() => setMenuAberto(false)}>
+            acompanhamento
           </NavLink>
         </>
       )}
@@ -70,43 +72,6 @@ export function Navbar() {
             </span>
           </NavLink>
           <nav className="hidden items-center gap-0.5 overflow-x-auto md:flex">{links}</nav>
-=======
-          <nav className="hidden items-center gap-1 overflow-x-auto md:flex">
-            <NavLink to="/" end className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-              catálogo
-            </NavLink>
-            {role === 'aluno' && (
-              <NavLink to="/minhas-reservas" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                minhas reservas
-              </NavLink>
-            )}
-            {role === 'admin' && (
-              <>
-                <NavLink to="/admin/recursos" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  recursos
-                </NavLink>
-                <NavLink to="/admin/aprovacoes" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  aprovações
-                </NavLink>
-                <NavLink to="/admin/reservas" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  todas as reservas
-                </NavLink>
-                <NavLink to="/admin/usuarios" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  usuários
-                </NavLink>
-                <NavLink to="/admin/dashboard" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  dashboard
-                </NavLink>
-                <NavLink to="/admin/acompanhamento" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  acompanhamento
-                </NavLink>
-                <NavLink to="/admin/planos" className={({ isActive }) => `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5'}`}>
-                  planos
-                </NavLink>
-              </>
-            )}
-          </nav>
->>>>>>> Stashed changes
         </div>
 
         <div className="flex items-center gap-2">

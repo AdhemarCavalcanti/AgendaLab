@@ -84,9 +84,6 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
-<<<<<<< Updated upstream
-=======
-              <Route path="/admin/planos" element={<AdminPlanos />} />
               <Route
                 path="/admin/acompanhamento"
                 element={
@@ -95,7 +92,6 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
->>>>>>> Stashed changes
             </Routes>
           </main>
           <footer className="border-t border-(--color-border)/80 py-7 text-center text-xs text-(--color-ink-soft)">
