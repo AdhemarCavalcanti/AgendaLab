@@ -167,7 +167,7 @@ export function RecursoAgenda() {
   const [avisoLimiteUsuario, setAvisoLimiteUsuario] = useState<string | null>(null)
   const [horasSemanaUsuario, setHorasSemanaUsuario] = useState(0)
 
-  const dias = useMemo(() => proximosDias(14), [])
+  const dias = useMemo(() => proximosDias(15), [])
   const tabela = tipo === 'sala' ? 'reservas_salas' : 'reservas_equipamentos'
   const coluna = tipo === 'sala' ? 'id_sala' : 'id_equipamento'
   const idNum = Number(id)

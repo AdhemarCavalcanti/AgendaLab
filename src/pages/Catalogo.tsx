@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { StatusBadge } from '../components/StatusBadge'
 import { obterImagemRecurso } from '../lib/recursoImagens'
 import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
+import { useFavoritos } from '../hooks/useFavoritos'
 
 interface Recurso {
   id: number
@@ -21,6 +22,12 @@ export function Catalogo() {
   const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+
+
+  const { favoritos, toggleFavorito } = useFavoritos()
+  const [mostrarFavoritos, setMostrarFavoritos] = useState(false)
+
+
 
   useEffect(() => {
     async function load() {
@@ -41,9 +48,10 @@ export function Catalogo() {
     setBusca('')
     setTipo('todos')
     setStatusFiltro('todos')
+    setMostrarFavoritos(false)
   }
 
-  const temFiltroAtivo = busca !== '' || tipo !== 'todos' || statusFiltro !== 'todos'
+  const temFiltroAtivo = busca !== '' || tipo !== 'todos' || statusFiltro !== 'todos' || mostrarFavoritos
 
   const recursos: Recurso[] = useMemo(() => {
     const rSalas: Recurso[] = salas.map((s) => {
@@ -80,7 +88,8 @@ export function Catalogo() {
       .filter((r) => tipo === 'todos' || r.tipo === tipo)
       .filter((r) => statusFiltro === 'todos' || r.status.toLowerCase() === statusFiltro.toLowerCase())
       .filter((r) => r.nome.toLowerCase().includes(busca.toLowerCase()))
-  }, [salas, equipamentos, tipo, statusFiltro, busca])
+      .filter((r) => !mostrarFavoritos || favoritos.includes(`${r.tipo}-${r.id}`))
+  }, [salas, equipamentos, tipo, statusFiltro, busca, favoritos, mostrarFavoritos])
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 md:px-8">
@@ -123,6 +132,15 @@ export function Catalogo() {
           </div>
 
           <hr className="border-(--color-border)/50" />
+
+          <div className="mb-2">
+            <button
+                onClick={() => setMostrarFavoritos(!mostrarFavoritos)}
+                className={`chip transition-all duration-200 ${mostrarFavoritos ? 'bg-yellow-400 text-yellow-900 border-yellow-500 font-bold' : ''}`}
+            >
+                {mostrarFavoritos ? '⭐ Exibindo Favoritos' : '☆ Meus Favoritos'}
+            </button>
+          </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
@@ -210,15 +228,31 @@ export function Catalogo() {
           )}
         </div>
       ) : (
+        
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {recursos.map((r) => {
             const imgInfo = obterImagemRecurso(r.tipo, r.nome)
+            const idUnico = `${r.tipo}-${r.id}`
+            const isFavorito = favoritos.includes(idUnico)
             return (
               <Link
                 key={`${r.tipo}-${r.id}`}
                 to={`/recurso/${r.tipo}/${r.id}`}
                 className="group card overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_color-mix(in_srgb,#0B1220_12%,transparent)]"
               >
+                <button
+                  onClick={(e) => {
+                    e.preventDefault() 
+                    e.stopPropagation()
+                    toggleFavorito(idUnico)
+                  }}
+                  className="absolute top-3 right-3 z-10 rounded-full bg-black/50 backdrop-blur-sm p-1.5 hover:bg-black/70 transition-colors"
+                  title={isFavorito ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                >
+                  <span className={`text-xl leading-none drop-shadow-md ${isFavorito ? 'text-yellow-400' : 'text-white/80'}`}>
+                    {isFavorito ? '★' : '☆'}
+                  </span>
+                </button>
                 {/* Imagem / Banner do Recurso */}
                 <div className={`relative h-44 w-full overflow-hidden bg-gradient-to-br ${imgInfo.gradienteFallback}`}>
                   <img
