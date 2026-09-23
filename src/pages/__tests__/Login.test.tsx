@@ -89,7 +89,7 @@ describe('Login Page', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByText('Entrar no ReservaAI')).toBeInTheDocument()
+    expect(screen.getByText('Entrar no AgendaLab')).toBeInTheDocument()
     const submitBtn = container.querySelector('button[type="submit"]')
     expect(submitBtn).toBeInTheDocument()
     expect(submitBtn?.textContent).toBe('entrar')

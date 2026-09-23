@@ -136,7 +136,7 @@ export function Login() {
         </p>
 
         <h1 className="mb-6 font-display text-3xl font-extrabold tracking-tight">
-          {aba === 'entrar' && 'Entrar no ReservaAI'}
+          {aba === 'entrar' && 'Entrar no AgendaLab'}
           {aba === 'esqueci-senha' && 'Redefinir Senha'}
           {(aba === 'ativar-usuario' || aba === 'ativar-admin') &&
             'Ativar meu cadastro'}

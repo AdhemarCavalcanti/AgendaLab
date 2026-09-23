@@ -95,7 +95,7 @@ export default function App() {
             </Routes>
           </main>
           <footer className="border-t border-(--color-border)/80 py-7 text-center text-xs text-(--color-ink-soft)">
-            ReservaAI · reservas corporativas de salas, equipamentos e objetos
+            AgendaLab · Sistema de gestão e reservas de laboratórios e equipamentos
           </footer>
         </div>
       </AuthProvider>

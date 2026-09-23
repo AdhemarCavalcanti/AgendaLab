@@ -1,28 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { StatusBadge } from '../components/StatusBadge'
+import { obterImagemRecurso } from '../lib/recursoImagens'
 import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
-
-// Componente do Badge com cores personalizadas
-function StatusBadge({ status }: { status: string; tipo?: string }) {
-  const s = status.toLowerCase()
-
-  let estilos = 'border-gray-200 bg-gray-100 text-gray-700'
-
-  if (s === 'livre' || s === 'disponível' || s === 'disponivel') {
-    estilos = 'border-emerald-200 bg-emerald-50 text-emerald-700 font-medium'
-  } else if (s === 'manutencao' || s === 'manutenção' || s === 'indisponivel' || s === 'indisponível') {
-    estilos = 'border-rose-200 bg-rose-50 text-rose-700 font-medium'
-  } else if (s === 'ocupado') {
-    estilos = 'border-amber-200 bg-amber-50 text-amber-700 font-medium'
-  }
-
-  return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${estilos}`}>
-      {status}
-    </span>
-  )
-}
 
 interface Recurso {
   id: number
@@ -197,14 +178,32 @@ export function Catalogo() {
       )}
 
       {loading ? (
-        <p className="text-sm text-(--color-ink-soft)">carregando recursos…</p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <div key={n} className="card overflow-hidden animate-pulse">
+              <div className="h-44 bg-black/5 dark:bg-white/5" />
+              <div className="p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="h-5 w-36 bg-black/10 dark:bg-white/10 rounded" />
+                  <div className="h-5 w-16 bg-black/10 dark:bg-white/10 rounded-full" />
+                </div>
+                <div className="h-3 w-20 bg-black/5 dark:bg-white/5 rounded" />
+                <div className="h-4 w-48 bg-black/5 dark:bg-white/5 rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
       ) : recursos.length === 0 ? (
-        <div className="empty">
-          <p>Nenhum recurso encontrado com os filtros aplicados.</p>
+        <div className="empty flex flex-col items-center justify-center py-12 text-center">
+          <span className="mb-2 text-3xl">🔍</span>
+          <p className="font-semibold text-base">Nenhum recurso encontrado</p>
+          <p className="text-sm text-(--color-ink-soft) mt-1 max-w-sm">
+            Não encontramos salas ou equipamentos com os filtros aplicados. Tente ajustar o termo de busca ou filtros.
+          </p>
           {temFiltroAtivo && (
             <button
               onClick={limparFiltros}
-              className="mt-3 text-sm font-medium text-(--color-cyan) hover:underline"
+              className="mt-4 text-sm font-medium text-(--color-cyan) hover:underline"
             >
               Resetar filtros
             </button>
@@ -212,25 +211,58 @@ export function Catalogo() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {recursos.map((r) => (
-            <Link
-              key={`${r.tipo}-${r.id}`}
-              to={`/recurso/${r.tipo}/${r.id}`}
-              className="group card overflow-hidden transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_40px_color-mix(in_srgb,#0B1220_8%,transparent)]"
-            >
-              <div className={`flex h-28 items-center justify-center ${r.tipo === 'sala' ? 'bg-(--color-cyan-soft)' : 'bg-(--color-accent-soft)'}`}>
-                <span className={`text-4xl ${r.tipo === 'sala' ? 'text-(--color-cyan)/35' : 'text-(--color-accent)'}`}>{r.tipo === 'sala' ? '▭' : '⚙'}</span>
-              </div>
-              <div className="p-5">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <h3 className="font-display font-semibold leading-tight group-hover:text-(--color-cyan)">{r.nome}</h3>
-                  <StatusBadge status={r.status} tipo="recurso" />
+          {recursos.map((r) => {
+            const imgInfo = obterImagemRecurso(r.tipo, r.nome)
+            return (
+              <Link
+                key={`${r.tipo}-${r.id}`}
+                to={`/recurso/${r.tipo}/${r.id}`}
+                className="group card overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_20px_45px_color-mix(in_srgb,#0B1220_12%,transparent)]"
+              >
+                {/* Imagem / Banner do Recurso */}
+                <div className={`relative h-44 w-full overflow-hidden bg-gradient-to-br ${imgInfo.gradienteFallback}`}>
+                  <img
+                    src={imgInfo.url}
+                    alt={imgInfo.alt}
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                    onError={(e) => {
+                      ;(e.target as HTMLElement).style.display = 'none'
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
+                  {/* Badge de tipo de recurso no canto superior esquerdo */}
+                  <span className="absolute top-3 left-3 rounded-full bg-black/40 backdrop-blur-md px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm border border-white/20">
+                    {r.tipo === 'sala' ? '🏛️ Sala' : '⚙️ Equipamento'}
+                  </span>
+
+                  {/* Categoria temática no canto inferior */}
+                  <span className="absolute bottom-2.5 left-3 text-[11px] font-medium text-white/90 drop-shadow-sm">
+                    {imgInfo.categoria}
+                  </span>
                 </div>
-                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">{r.tipo}</p>
-                <p className="mt-1 text-sm text-(--color-ink-soft)">{r.detalhe}</p>
-              </div>
-            </Link>
-          ))}
+
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <h3 className="font-display text-lg font-bold leading-snug group-hover:text-(--color-cyan) transition-colors">
+                        {r.nome}
+                      </h3>
+                      <StatusBadge status={r.status} tipo="recurso" />
+                    </div>
+                    <p className="text-sm text-(--color-ink-soft) flex items-center gap-1.5 mt-1">
+                      {r.detalhe}
+                    </p>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-(--color-border)/60 flex items-center justify-between text-xs font-semibold text-(--color-cyan)">
+                    <span>Ver horários e reservar</span>
+                    <span className="group-hover:translate-x-1 transition-transform">→</span>
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>
