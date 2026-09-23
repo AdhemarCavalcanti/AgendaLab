@@ -65,10 +65,10 @@ export function Navbar() {
         <div className="flex min-w-0 items-center gap-6">
           <NavLink to="/" className="flex items-center gap-2.5 shrink-0" onClick={() => setMenuAberto(false)}>
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-(--color-cyan) text-sm font-extrabold tracking-tight text-white shadow-[0_8px_18px_color-mix(in_srgb,#4A1F2D_20%,transparent)]">
-              A
+              R
             </span>
             <span className="font-display text-[1.05rem] font-extrabold tracking-tight text-(--color-ink)">
-              Agenda<span className="text-(--color-accent)">Lab</span>
+              Reserve <span className="text-(--color-accent)">AI</span>
             </span>
           </NavLink>
           <nav className="hidden items-center gap-0.5 overflow-x-auto md:flex">{links}</nav>
