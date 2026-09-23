@@ -296,7 +296,7 @@ export function Perfil() {
           </div>
 
           <p className="text-sm text-(--color-ink)">
-            Caso você não queira mais utilizar a plataforma ReservaAI, você tem a opção de excluir
+            Caso você não queira mais utilizar a plataforma Reserve AI, você tem a opção de excluir
             sua conta definitivamente e solicitar a remoção/anonimização de seus dados pessoais.
           </p>
 

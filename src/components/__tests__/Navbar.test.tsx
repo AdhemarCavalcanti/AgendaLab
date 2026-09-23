@@ -37,7 +37,7 @@ describe('Navbar Component', () => {
       </MemoryRouter>
     )
 
-    expect(screen.getByRole('link', { name: /ReservaAI/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Reserve\s*AI/i })).toBeInTheDocument()
     expect(screen.getByText('catálogo')).toBeInTheDocument()
     expect(screen.getByText('planos')).toBeInTheDocument()
     expect(screen.getByText(/entrar/i)).toBeInTheDocument()

@@ -4,10 +4,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { NotificationBell } from './NotificationBell'
 
 const linkBase =
-  'px-3 py-2 text-sm font-medium rounded-xl transition-colors whitespace-nowrap'
+  'px-2.5 py-1.5 lg:px-3 lg:py-2 text-xs lg:text-sm font-medium rounded-xl transition-all whitespace-nowrap'
 
 function navClass(isActive: boolean) {
-  return `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan)' : 'text-(--color-ink-soft) hover:bg-black/5 hover:text-(--color-ink)'}`
+  return `${linkBase} ${isActive ? 'bg-(--color-cyan-soft) text-(--color-cyan) font-semibold shadow-xs' : 'text-(--color-ink-soft) hover:bg-black/5 hover:text-(--color-ink)'}`
 }
 
 export function Navbar() {
@@ -61,26 +61,30 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-(--color-border)/80 bg-white/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:px-8">
-        <div className="flex min-w-0 items-center gap-6">
-          <NavLink to="/" className="flex items-center gap-2.5 shrink-0" onClick={() => setMenuAberto(false)}>
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-(--color-cyan) text-sm font-extrabold tracking-tight text-white shadow-[0_8px_18px_color-mix(in_srgb,#4A1F2D_20%,transparent)]">
-              R
-            </span>
-            <span className="font-display text-[1.05rem] font-extrabold tracking-tight text-(--color-ink)">
-              Reserva<span className="text-(--color-accent)">AI</span>
-            </span>
-          </NavLink>
-          <nav className="hidden items-center gap-0.5 overflow-x-auto md:flex">{links}</nav>
-        </div>
+      <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3 px-4 py-2.5 md:px-6 lg:px-8">
+        {/* Lado Esquerdo: Logo */}
+        <NavLink to="/" className="flex items-center gap-2.5 shrink-0" onClick={() => setMenuAberto(false)}>
+          <span className="grid h-9 w-9 place-items-center rounded-xl bg-(--color-cyan) text-sm font-extrabold tracking-tight text-white shadow-[0_8px_18px_color-mix(in_srgb,#4A1F2D_20%,transparent)]">
+            R
+          </span>
+          <span className="font-display text-[1.05rem] font-extrabold tracking-tight text-(--color-ink)">
+            Reserve <span className="text-(--color-accent)">AI</span>
+          </span>
+        </NavLink>
 
-        <div className="flex items-center gap-2">
+        {/* Centro: Links de Navegação distribuídos */}
+        <nav className="hidden md:flex items-center justify-center gap-1 flex-1 mx-2 lg:mx-4 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {links}
+        </nav>
+
+        {/* Lado Direito: Ações do Usuário */}
+        <div className="flex items-center gap-2 shrink-0">
           {perfil ? (
             <>
               {(role === 'admin' || role === 'aluno') && <NotificationBell />}
               <NavLink
                 to="/perfil"
-                className="hidden text-right sm:block group hover:opacity-80 transition-opacity"
+                className="hidden xl:block text-right group hover:opacity-80 transition-opacity"
                 title="Acessar Perfil e Configurações"
               >
                 <p className="text-sm font-semibold leading-tight text-(--color-ink) group-hover:text-(--color-cyan)">{perfil.nome}</p>
@@ -89,7 +93,7 @@ export function Navbar() {
               <NavLink
                 to="/perfil"
                 className={({ isActive }) =>
-                  `rounded-xl border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  `rounded-xl border px-3 py-1.5 text-xs lg:text-sm font-medium transition-colors ${
                     isActive
                       ? 'border-transparent bg-(--color-cyan-soft) text-(--color-cyan)'
                       : 'border-(--color-border) text-(--color-ink-soft) hover:border-(--color-cyan) hover:text-(--color-cyan)'
@@ -100,7 +104,7 @@ export function Navbar() {
               </NavLink>
               <button
                 onClick={handleSignOut}
-                className="rounded-xl border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-ink-soft) transition-colors hover:border-(--color-coral) hover:text-(--color-coral)"
+                className="rounded-xl border border-(--color-border) px-3 py-1.5 text-xs lg:text-sm font-medium text-(--color-ink-soft) transition-colors hover:border-(--color-coral) hover:text-(--color-coral)"
               >
                 sair
               </button>

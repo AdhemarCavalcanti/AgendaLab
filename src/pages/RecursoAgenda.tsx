@@ -6,6 +6,7 @@ import type { Equipamento, Sala, TipoRecurso } from '../lib/types'
 import { StatusBadge } from '../components/StatusBadge'
 import { AvailabilityGrid, type Ocupacao } from '../components/AvailabilityGrid'
 import { Modal } from '../components/Modal'
+import { obterImagemRecurso } from '../lib/recursoImagens'
 
 function proximosDias(n: number) {
   const dias: Date[] = []
@@ -713,11 +714,35 @@ export function RecursoAgenda() {
       quantidadeSelecionada: acessoriosSelecionados[acessorio.id],
     }))
 
+  const imgInfo = obterImagemRecurso(tipo as TipoRecurso, nome)
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
       <button onClick={() => navigate(-1)} className="mb-6 text-sm text-(--color-ink-soft) hover:text-(--color-cyan)">
         ← voltar ao catálogo
       </button>
+
+      {/* Banner / Foto Temática do Recurso */}
+      <div className={`relative mb-6 h-52 md:h-64 w-full overflow-hidden rounded-2xl border border-(--color-border) bg-gradient-to-br ${imgInfo.gradienteFallback} shadow-sm`}>
+        <img
+          src={imgInfo.url}
+          alt={imgInfo.alt}
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            ;(e.target as HTMLElement).style.display = 'none'
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
+
+        <div className="absolute top-4 left-4 flex gap-2">
+          <span className="rounded-full bg-black/50 backdrop-blur-md px-3 py-1 text-xs font-semibold text-white border border-white/20">
+            {tipo === 'sala' ? '🏛️ Sala' : '⚙️ Equipamento'}
+          </span>
+          <span className="rounded-full bg-black/40 backdrop-blur-md px-3 py-1 text-xs font-medium text-white/90 border border-white/20">
+            {imgInfo.categoria}
+          </span>
+        </div>
+      </div>
 
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
