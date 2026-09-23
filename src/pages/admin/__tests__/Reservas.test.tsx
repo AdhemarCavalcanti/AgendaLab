@@ -54,6 +54,17 @@ describe('AdminReservas Page', () => {
       fim: '2026-11-01T12:00:00.000Z',
       status: 'aprovada',
       quantidade: 2,
+      vistorias_equipamentos: [{
+        id: 90,
+        id_reserva_equipamento: 3,
+        etapa: 'entrega',
+        cabo_presente: true,
+        pecas_completas: true,
+        sem_danos_visiveis: true,
+        observacoes: null,
+        criado_em: '2026-11-01T09:00:00.000Z',
+        administradores: { nome: 'Administrador Geral' },
+      }],
       id_usuario: 1,
       usuarios: { nome: 'Prof. Silva' },
     },
@@ -128,6 +139,7 @@ describe('AdminReservas Page', () => {
     expect(screen.getByText('Câmera Térmica')).toBeInTheDocument()
     expect(screen.getByText('Aluno Marcos')).toBeInTheDocument()
     expect(screen.getByText(/Kit Didático × 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/Cabo: presente · Peças: completas/i)).toBeInTheDocument()
   })
 
   it('filtra reservas por tipo de recurso (apenas equipamentos)', async () => {

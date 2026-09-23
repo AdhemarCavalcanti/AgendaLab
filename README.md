@@ -126,6 +126,16 @@ supabase/sql/reservas_semanais.sql
 
 A RPC `solicitar_reservas_semanais` aceita uma data de término inclusiva, valida todas as ocorrências e grava de 2 a 52 reservas em uma única transação. Se houver conflito, manutenção, estoque insuficiente ou alguma validação existente falhar, nenhuma reserva da série é criada. Cada ocorrência segue o fluxo normal de aprovação e cancelamento.
 
+### Vistoria de equipamentos na entrega e devolução
+
+Depois de `acessorios_reserva_sala.sql`, aplique:
+
+```text
+supabase/sql/vistorias_equipamentos.sql
+```
+
+Na aba **Entrega e devolução** do painel de aprovações, o responsável registra cabo, peças e condição física de cada reserva de equipamento aprovada, inclusive acessórios de sala. A entrega exige os três itens confirmados. No retorno, qualquer ausência ou dano exige uma observação; a RPC registra a vistoria e marca a devolução na mesma transação. O histórico, com data e responsável, fica visível na reserva para o administrador e o solicitante. O relato de avaria feito pelo aluno continua disponível separadamente.
+
 ### ⚠️ Reporte de Defeitos e Avarias em Recursos Utilizados
 
 Para permitir que alunos e pesquisadores reportem ocorrências, defeitos ou avarias logo após a utilização de uma sala ou equipamento, aplique:
@@ -294,7 +304,7 @@ Não existe coluna "role": o papel é resolvido chamando a função `is_admin()`
 ## Painel do administrador
 
 - `/admin/recursos` — CRUD de salas/equipamentos (nome, capacidade/quantidade, status), manutenção programada por intervalo, interdição emergencial por data e turnos e trava de limite de salas do plano Grátis.
-- `/admin/aprovacoes` — fila de solicitações pendentes, acompanhamento de devoluções de equipamentos e **Aba de Avarias Reportadas**, com **notificação e atualização em tempo real** e ações para alterar status (Em análise, Resolvido).
+- `/admin/aprovacoes` — fila de solicitações pendentes, vistoria de entrega e devolução de equipamentos e **Aba de Avarias Reportadas**, com **notificação e atualização em tempo real** e ações para alterar status (Em análise, Resolvido).
 - `/admin/reservas` — visão geral de **todas** as reservas (qualquer status), com filtro por tipo/status.
 - `/admin/usuarios` — pré-cadastro de alunos/administradores com trava de limite de 1 administrador no plano Grátis.
 - `/admin/dashboard` — métricas (reservas concluídas por semana, % de ocupação por recurso).

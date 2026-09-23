@@ -74,6 +74,18 @@ export interface ReservaEquipamento {
   justificativa_cancelamento: string | null
 }
 
+export interface VistoriaEquipamento {
+  id: number
+  id_reserva_equipamento: number
+  etapa: 'entrega' | 'devolucao'
+  cabo_presente: boolean
+  pecas_completas: boolean
+  sem_danos_visiveis: boolean
+  observacoes: string | null
+  criado_em: string
+  administradores?: { nome: string } | { nome: string }[] | null
+}
+
 export type TipoRecurso = 'sala' | 'equipamento'
 
 export type Role = 'admin' | 'aluno' | null

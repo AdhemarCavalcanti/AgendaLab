@@ -66,6 +66,17 @@ describe('MinhasReservas Page', () => {
       status: 'pendente',
       quantidade: 2,
       observacao: null,
+      vistorias_equipamentos: [{
+        id: 80,
+        id_reserva_equipamento: 202,
+        etapa: 'entrega',
+        cabo_presente: true,
+        pecas_completas: true,
+        sem_danos_visiveis: true,
+        observacoes: null,
+        criado_em: '2026-10-15T09:00:00.000Z',
+        administradores: { nome: 'Responsável' },
+      }],
     },
   ]
 
@@ -154,6 +165,7 @@ describe('MinhasReservas Page', () => {
     expect(screen.getByText('Projetor HD')).toBeInTheDocument()
     expect(screen.getByText(/Estudo de Física Teórica/i)).toBeInTheDocument()
     expect(screen.getByText(/Kit Didático × 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/Cabo: presente · Peças: completas/i)).toBeInTheDocument()
     expect(screen.getByText('Cancelada pela Administração')).toBeInTheDocument()
     expect(screen.getByText(/Falta de energia no campus/i)).toBeInTheDocument()
   })

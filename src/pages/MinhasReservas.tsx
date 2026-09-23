@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { StatusBadge } from '../components/StatusBadge'
 import { Modal } from '../components/Modal'
-import type { SeveridadeAvaria, StatusReserva } from '../lib/types'
+import type { SeveridadeAvaria, StatusReserva, VistoriaEquipamento } from '../lib/types'
+import { VistoriaHistorico } from '../components/VistoriaHistorico'
 
 interface Item {
   id: number
@@ -16,10 +17,12 @@ interface Item {
   extra?: string
   canceladaPorAdministracao: boolean
   justificativaCancelamento?: string
+  vistorias: VistoriaEquipamento[]
   acessorios?: Array<{
     nome: string
     quantidade: number
     status: StatusReserva
+    vistorias: VistoriaEquipamento[]
   }>
 }
 
@@ -133,7 +136,7 @@ export function MinhasReservas() {
         .order('inicio', { ascending: false }),
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, id_reserva_sala, inicio, fim, status, quantidade, observacao, cancelada_por_administracao, justificativa_cancelamento')
+        .select('id, id_equipamento, id_reserva_sala, inicio, fim, status, quantidade, observacao, cancelada_por_administracao, justificativa_cancelamento, vistorias_equipamentos(id, id_reserva_equipamento, etapa, cabo_presente, pecas_completas, sem_danos_visiveis, observacoes, criado_em, administradores(nome))')
         .eq('id_usuario', targetUserId)
         .order('inicio', { ascending: false }),
       supabase.from('salas').select('id_sala, nome'),
@@ -156,6 +159,7 @@ export function MinhasReservas() {
         nome: mapaEquip.get(reserva.id_equipamento) ?? `Equipamento #${reserva.id_equipamento}`,
         quantidade: Number(reserva.quantidade ?? 1),
         status: reserva.status,
+        vistorias: reserva.vistorias_equipamentos ?? [],
       })
       acessoriosPorReservaSala.set(idReservaSala, atuais)
     }
@@ -172,6 +176,7 @@ export function MinhasReservas() {
       canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
       justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
       acessorios: acessoriosPorReservaSala.get(r.id) ?? [],
+      vistorias: [],
     }))
 
     const itensEquip: Item[] = (resEquip.data ?? [])
@@ -187,6 +192,7 @@ export function MinhasReservas() {
         extra: `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · ${r.observacao}` : ''}`,
         canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
         justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
+        vistorias: r.vistorias_equipamentos ?? [],
       }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime()))
@@ -273,6 +279,15 @@ export function MinhasReservas() {
                       Justificativa da Administração: {item.justificativaCancelamento}
                     </p>
                   )}
+                  <VistoriaHistorico vistorias={item.vistorias} />
+                  {item.acessorios?.map((acessorio, index) => (
+                    acessorio.vistorias.length > 0 && (
+                      <div key={`${acessorio.nome}-${index}`}>
+                        <p className="mt-2 text-xs font-medium">{acessorio.nome}</p>
+                        <VistoriaHistorico vistorias={acessorio.vistorias} />
+                      </div>
+                    )
+                  ))}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {concluida && (

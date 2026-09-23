@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { AdminAprovacoes } from '../Aprovacoes'
@@ -15,6 +15,7 @@ vi.mock('../../../lib/supabase', () => {
   return {
     supabase: {
       from: vi.fn(),
+      rpc: vi.fn(),
       channel: vi.fn(() => mockChannel),
       removeChannel: vi.fn(),
     },
@@ -22,6 +23,7 @@ vi.mock('../../../lib/supabase', () => {
 })
 
 describe('AdminAprovacoes Page', () => {
+  let mockVistorias: any[] = []
   const mockSalasPendentes = [
     {
       id: 1,
@@ -102,6 +104,20 @@ describe('AdminAprovacoes Page', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockVistorias = []
+    vi.mocked(supabase.rpc).mockImplementation(((_fn: string, params: any) => {
+      mockVistorias.push({
+        id: mockVistorias.length + 1,
+        id_reserva_equipamento: params.p_id_reserva_equipamento,
+        etapa: params.p_etapa,
+        cabo_presente: params.p_cabo_presente,
+        pecas_completas: params.p_pecas_completas,
+        sem_danos_visiveis: params.p_sem_danos_visiveis,
+        observacoes: params.p_observacoes,
+        criado_em: '2026-10-19T09:00:00.000Z',
+      })
+      return Promise.resolve({ data: null, error: null })
+    }) as any)
 
     vi.spyOn(AuthContextModule, 'useAuth').mockReturnValue({
       session: { user: { id: 'uuid-admin' } } as any,
@@ -138,7 +154,13 @@ describe('AdminAprovacoes Page', () => {
             }
             if (col === 'status_devolucao' && val === 'pendente') {
               return {
-                order: vi.fn().mockResolvedValue({ data: mockEquipDevolucoes, error: null }),
+                order: vi.fn().mockImplementation(async () => ({
+                  data: mockEquipDevolucoes.map((reserva) => ({
+                    ...reserva,
+                    vistorias_equipamentos: mockVistorias.filter((vistoria) => vistoria.id_reserva_equipamento === reserva.id),
+                  })),
+                  error: null,
+                })),
               }
             }
             return chain
@@ -256,7 +278,7 @@ describe('AdminAprovacoes Page', () => {
     expect(mockUpdateSalas).not.toHaveBeenCalled()
   })
 
-  it('alterna para aba de devoluções e registra devolução de equipamento', async () => {
+  it('exige checklist completo na entrega e registra a conferência do retorno com avaria', async () => {
     const user = userEvent.setup()
 
     render(
@@ -267,23 +289,46 @@ describe('AdminAprovacoes Page', () => {
 
     await screen.findByText(/Laboratório Beta/i)
 
-    const tabDevolucoes = screen.getByRole('button', { name: /Pedidos para devolução/i })
+    const tabDevolucoes = screen.getByRole('button', { name: /Entrega e devolução/i })
     await user.click(tabDevolucoes)
 
     expect(await screen.findByText(/Multímetro Digital/i)).toBeInTheDocument()
     expect(screen.getByText(/Ana Pesquisadora/i)).toBeInTheDocument()
     expect(screen.getByText('Acessório de:', { exact: false }).parentElement).toHaveTextContent('Laboratório Beta')
 
-    const btnDevolver = screen.getByRole('button', { name: /devolvido/i })
-    await user.click(btnDevolver)
+    await user.click(screen.getByRole('button', { name: /vistoriar entrega/i }))
+    await user.click(screen.getByRole('button', { name: /registrar vistoria/i }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Confira todos os itens')
+    for (const grupo of ['Cabo presente', 'Peças completas', 'Sem danos visíveis']) {
+      const sim = within(screen.getByRole('group', { name: grupo })).getByRole('radio', { name: 'Sim' })
+      await user.click(sim)
+      expect(sim).toBeChecked()
+    }
+    await user.click(screen.getByRole('button', { name: /registrar vistoria/i }))
 
     await waitFor(() => {
-      expect(mockUpdateEquip).toHaveBeenCalledWith(
-        expect.objectContaining({
-          status_devolucao: 'devolvido',
-          id_adm: 3,
-        })
-      )
+      expect(supabase.rpc).toHaveBeenCalledWith('registrar_vistoria_equipamento', expect.objectContaining({
+        p_id_reserva_equipamento: 5,
+        p_etapa: 'entrega',
+        p_cabo_presente: true,
+        p_pecas_completas: true,
+        p_sem_danos_visiveis: true,
+      }))
+    })
+    await user.click(await screen.findByRole('button', { name: /vistoriar devolução/i }))
+    await user.click(screen.getByRole('group', { name: 'Cabo presente' }).querySelectorAll('input')[1])
+    await user.click(screen.getByRole('group', { name: 'Peças completas' }).querySelectorAll('input')[0])
+    await user.click(screen.getByRole('group', { name: 'Sem danos visíveis' }).querySelectorAll('input')[0])
+    await user.click(screen.getByRole('button', { name: /registrar vistoria/i }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Descreva as peças ausentes')
+    await user.type(screen.getByRole('textbox', { name: /Observações de avaria/i }), 'Cabo não retornou')
+    await user.click(screen.getByRole('button', { name: /registrar vistoria/i }))
+    await waitFor(() => {
+      expect(supabase.rpc).toHaveBeenCalledWith('registrar_vistoria_equipamento', expect.objectContaining({
+        p_etapa: 'devolucao',
+        p_cabo_presente: false,
+        p_observacoes: 'Cabo não retornou',
+      }))
     })
   })
 

@@ -3,6 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { StatusBadge } from '../../components/StatusBadge'
 import { useAuth } from '../../contexts/AuthContext'
 import type { StatusReserva, TipoRecurso } from '../../lib/types'
+import type { VistoriaEquipamento } from '../../lib/types'
+import { VistoriaHistorico } from '../../components/VistoriaHistorico'
 
 interface Item {
   id: number
@@ -15,10 +17,12 @@ interface Item {
   detalhe?: string
   canceladaPorAdministracao: boolean
   justificativaCancelamento?: string
+  vistorias: VistoriaEquipamento[]
   acessorios?: Array<{
     nome: string
     quantidade: number
     status: StatusReserva
+    vistorias: VistoriaEquipamento[]
   }>
 }
 
@@ -65,7 +69,7 @@ export function AdminReservas() {
 
     let queryEquip = supabase
       .from('reservas_equipamentos')
-      .select('id, id_equipamento, id_reserva_sala, inicio, fim, status, quantidade, observacao, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome)')
+      .select('id, id_equipamento, id_reserva_sala, inicio, fim, status, quantidade, observacao, id_usuario, cancelada_por_administracao, justificativa_cancelamento, usuarios(nome), vistorias_equipamentos(id, id_reserva_equipamento, etapa, cabo_presente, pecas_completas, sem_danos_visiveis, observacoes, criado_em, administradores(nome))')
       .order('inicio', { ascending: false })
 
     // Aplica o filtro se for usuário comum (aluno) e tivermos encontrado o idUsuarioLogado
@@ -99,6 +103,7 @@ export function AdminReservas() {
         nome: mapaEquip.get(reserva.id_equipamento) ?? `Equipamento #${reserva.id_equipamento}`,
         quantidade: Number(reserva.quantidade ?? 1),
         status: reserva.status,
+        vistorias: reserva.vistorias_equipamentos ?? [],
       })
       acessoriosPorReservaSala.set(idReservaSala, atuais)
     }
@@ -115,6 +120,7 @@ export function AdminReservas() {
       canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
       justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
       acessorios: acessoriosPorReservaSala.get(r.id) ?? [],
+      vistorias: [],
     }))
 
     const itensEquip: Item[] = (resEquip.data ?? [])
@@ -130,6 +136,7 @@ export function AdminReservas() {
         detalhe: `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · ${r.observacao}` : ''}`,
         canceladaPorAdministracao: r.cancelada_por_administracao ?? false,
         justificativaCancelamento: r.justificativa_cancelamento ?? undefined,
+        vistorias: r.vistorias_equipamentos ?? [],
       }))
 
     setItens([...itensSalas, ...itensEquip].sort((a, b) => new Date(b.inicio).getTime() - new Date(a.inicio).getTime()))
@@ -286,6 +293,15 @@ export function AdminReservas() {
                         Justificativa da Administração: {item.justificativaCancelamento}
                       </p>
                     )}
+                    <VistoriaHistorico vistorias={item.vistorias} />
+                    {item.acessorios?.map((acessorio, index) => (
+                      acessorio.vistorias.length > 0 && (
+                        <div key={`${acessorio.nome}-${index}`}>
+                          <p className="mt-2 text-xs font-medium">{acessorio.nome}</p>
+                          <VistoriaHistorico vistorias={acessorio.vistorias} />
+                        </div>
+                      )
+                    ))}
                   </td>
                   {role === 'admin' && <td>{item.usuarioNome}</td>}
                   <td className="text-xs">

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../contexts/AuthContext'
 import { Modal } from '../../components/Modal'
-import type { RelatoAvaria, StatusAvaria } from '../../lib/types'
+import type { RelatoAvaria, StatusAvaria, VistoriaEquipamento } from '../../lib/types'
+import { VistoriaHistorico } from '../../components/VistoriaHistorico'
 
 interface Solicitacao {
   id: number
@@ -22,6 +23,7 @@ interface Solicitacao {
     quantidade: number
   }>
   salaVinculada?: string
+  vistorias: VistoriaEquipamento[]
 }
 
 export function AdminAprovacoes() {
@@ -37,6 +39,12 @@ export function AdminAprovacoes() {
   const [justificativa, setJustificativa] = useState('')
   const [erroJustificativa, setErroJustificativa] = useState<string | null>(null)
   const [novaSolicitacao, setNovaSolicitacao] = useState(false)
+  const [vistoriando, setVistoriando] = useState<Solicitacao | null>(null)
+  const [caboPresente, setCaboPresente] = useState<boolean | null>(null)
+  const [pecasCompletas, setPecasCompletas] = useState<boolean | null>(null)
+  const [semDanosVisiveis, setSemDanosVisiveis] = useState<boolean | null>(null)
+  const [observacoesVistoria, setObservacoesVistoria] = useState('')
+  const [erroVistoria, setErroVistoria] = useState<string | null>(null)
 
   async function carregar() {
     setLoading(true)
@@ -59,7 +67,7 @@ export function AdminAprovacoes() {
       // 3. Equipamentos APROVADOS que ainda estão PENDENTES DE DEVOLUÇÃO
       supabase
         .from('reservas_equipamentos')
-        .select('id, id_equipamento, id_reserva_sala, inicio, fim, observacao, quantidade, status, status_devolucao, usuarios(nome, email, matricula), reservas_salas(id_sala)')
+        .select('id, id_equipamento, id_reserva_sala, inicio, fim, observacao, quantidade, status, status_devolucao, usuarios(nome, email, matricula), reservas_salas(id_sala), vistorias_equipamentos(id, id_reserva_equipamento, etapa, cabo_presente, pecas_completas, sem_danos_visiveis, observacoes, criado_em, administradores(nome))')
         .eq('status', 'aprovada')
         .eq('status_devolucao', 'pendente')
         .order('inicio', { ascending: true }),
@@ -105,6 +113,7 @@ export function AdminAprovacoes() {
       status: r.status,
       detalhe: r.motivo ? `Motivo: ${r.motivo} · ${r.quantidade_pessoas ?? '—'} pessoa(s)` : `${r.quantidade_pessoas ?? '—'} pessoa(s)`,
       acessorios: acessoriosPorReservaSala.get(r.id) ?? [],
+      vistorias: [],
     }))
 
     const itensEquip: Solicitacao[] = (resEquip.data ?? [])
@@ -121,6 +130,7 @@ export function AdminAprovacoes() {
         status: r.status,
         quantidade: r.quantidade ?? 1,
         detalhe: r.motivo ? `Motivo: ${r.motivo} · Quantidade: ${r.quantidade ?? 1}` : `Quantidade: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
+        vistorias: [],
       }))
 
     const devolucoesEquip: Solicitacao[] = (resDevolucoes.data ?? []).map((r: any) => ({
@@ -135,10 +145,11 @@ export function AdminAprovacoes() {
       status: r.status,
       status_devolucao: r.status_devolucao,
       quantidade: r.quantidade ?? 1,
-      detalhe: `Quantidade retirada: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
+      detalhe: `Quantidade reservada: ${r.quantidade ?? 1}${r.observacao ? ` · Obs: ${r.observacao}` : ''}`,
       salaVinculada: r.id_reserva_sala
         ? mapaSalas.get(Number(r.reservas_salas?.id_sala)) ?? `Reserva de sala #${r.id_reserva_sala}`
         : undefined,
+      vistorias: (r.vistorias_equipamentos ?? []).sort((a: VistoriaEquipamento, b: VistoriaEquipamento) => a.criado_em.localeCompare(b.criado_em)),
     }))
 
     const avariasFormatadas: RelatoAvaria[] = (resAvarias.data ?? []).map((a: any) => ({
@@ -178,6 +189,7 @@ export function AdminAprovacoes() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'reservas_equipamentos' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservas_salas' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reservas_equipamentos' }, () => setNovaSolicitacao(true))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vistorias_equipamentos' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'relatos_avarias' }, () => setNovaSolicitacao(true))
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'relatos_avarias' }, () => setNovaSolicitacao(true))
       .subscribe()
@@ -220,37 +232,49 @@ export function AdminAprovacoes() {
     else carregar()
   }
 
-  async function marcarDevolvido(item: Solicitacao) {
-    setProcessando(item.id)
+  function abrirVistoria(item: Solicitacao) {
+    setVistoriando(item)
+    setCaboPresente(null)
+    setPecasCompletas(null)
+    setSemDanosVisiveis(null)
+    setObservacoesVistoria('')
+    setErroVistoria(null)
+  }
 
-    try {
-      const { data, error } = await supabase
-        .from('reservas_equipamentos')
-        .update({
-          status_devolucao: 'devolvido',
-          id_adm: meuIdAdm
-        })
-        .eq('id', Number(item.id))
-        .select()
-
-      if (error) {
-        console.error('Erro na atualização:', error)
-        alert('Erro ao registrar devolução: ' + error.message)
-        return
-      }
-
-      if (!data || data.length === 0) {
-        alert('Nenhum registro foi atualizado. Verifique se o ID existe.')
-        return
-      }
-
-      await carregar()
-    } catch (err: any) {
-      console.error('Erro inesperado:', err)
-      alert('Erro inesperado: ' + err.message)
-    } finally {
-      setProcessando(null)
+  async function registrarVistoria(event: React.FormEvent) {
+    event.preventDefault()
+    if (!vistoriando) return
+    const etapa = vistoriando.vistorias.some((v) => v.etapa === 'entrega') ? 'devolucao' : 'entrega'
+    if (caboPresente === null || pecasCompletas === null || semDanosVisiveis === null) {
+      setErroVistoria('Confira todos os itens do checklist.')
+      return
     }
+    if (etapa === 'entrega' && (!caboPresente || !pecasCompletas || !semDanosVisiveis)) {
+      setErroVistoria('Todos os itens precisam estar confirmados para liberar o equipamento.')
+      return
+    }
+    if ((!caboPresente || !pecasCompletas || !semDanosVisiveis) && !observacoesVistoria.trim()) {
+      setErroVistoria('Descreva as peças ausentes ou avarias encontradas.')
+      return
+    }
+
+    setProcessando(vistoriando.id)
+    setErroVistoria(null)
+    const { error } = await supabase.rpc('registrar_vistoria_equipamento', {
+      p_id_reserva_equipamento: vistoriando.id,
+      p_etapa: etapa,
+      p_cabo_presente: caboPresente,
+      p_pecas_completas: pecasCompletas,
+      p_sem_danos_visiveis: semDanosVisiveis,
+      p_observacoes: observacoesVistoria.trim() || null,
+    })
+    setProcessando(null)
+    if (error) {
+      setErroVistoria(error.message)
+      return
+    }
+    setVistoriando(null)
+    await carregar()
   }
 
   async function confirmarRejeicao() {
@@ -331,7 +355,7 @@ export function AdminAprovacoes() {
           onClick={() => setAba('devolucao')}
           className={`chip ${aba === 'devolucao' ? 'chip-on' : ''}`}
         >
-          Pedidos para devolução ({devolucoes.length})
+          Entrega e devolução ({devolucoes.length})
         </button>
         <button
           onClick={() => setAba('avarias')}
@@ -399,7 +423,7 @@ export function AdminAprovacoes() {
       ) : aba === 'devolucao' ? (
         devolucoes.length === 0 ? (
           <p className="empty">
-            Nenhum equipamento em uso aguardando devolução.
+            Nenhum equipamento aprovado aguardando entrega ou devolução.
           </p>
         ) : (
           <div className="space-y-3">
@@ -408,9 +432,11 @@ export function AdminAprovacoes() {
                 <div>
                   <div className="mb-1 flex items-center gap-2">
                     <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-(--color-ink-soft)">equipamento</span>
-                    <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">em uso / aguardando devolução</span>
+                    <span className="rounded-full border border-(--color-cyan)/30 bg-(--color-cyan-soft) px-2 py-0.5 text-[11px] font-medium text-(--color-cyan)">
+                      {item.vistorias.some((v) => v.etapa === 'entrega') ? 'aguardando devolução' : 'aguardando entrega'}
+                    </span>
                   </div>
-                  <p className="font-medium">{item.recursoNome} — retirado por {item.usuarioNome}</p>
+                  <p className="font-medium">{item.recursoNome} — reservado por {item.usuarioNome}</p>
 
                   <p className="text-xs text-(--color-ink-soft)">
                     {item.usuarioMatricula && <span>Matrícula: {item.usuarioMatricula}</span>}
@@ -427,13 +453,14 @@ export function AdminAprovacoes() {
                     </p>
                   )}
                   {item.detalhe && <p className="mt-1 text-sm text-(--color-ink-soft)">{item.detalhe}</p>}
+                  <VistoriaHistorico vistorias={item.vistorias} />
                 </div>
                 <button
-                  onClick={() => marcarDevolvido(item)}
+                  onClick={() => abrirVistoria(item)}
                   disabled={processando === item.id}
                   className="btn-primary bg-(--color-cyan) hover:bg-(--color-cyan)"
                 >
-                  {processando === item.id ? 'salvando…' : 'devolvido'}
+                  {item.vistorias.some((v) => v.etapa === 'entrega') ? 'vistoriar devolução' : 'vistoriar entrega'}
                 </button>
               </div>
             ))}
@@ -523,6 +550,41 @@ export function AdminAprovacoes() {
             )
           })}
         </div>
+      )}
+
+      {vistoriando && (
+        <Modal
+          title={`${vistoriando.vistorias.some((v) => v.etapa === 'entrega') ? 'Vistoria de devolução' : 'Vistoria de entrega'}: ${vistoriando.recursoNome}`}
+          onClose={() => !processando && setVistoriando(null)}
+        >
+          <form onSubmit={registrarVistoria} className="space-y-4">
+            <p className="text-sm text-(--color-ink-soft)">Confira cabos, peças e condição física de {vistoriando.quantidade ?? 1} unidade(s).</p>
+            {([
+              ['Cabo presente', caboPresente, setCaboPresente],
+              ['Peças completas', pecasCompletas, setPecasCompletas],
+              ['Sem danos visíveis', semDanosVisiveis, setSemDanosVisiveis],
+            ] as const).map(([label, valor, alterar]) => (
+              <fieldset key={label} className="rounded-lg border border-(--color-border) p-3">
+                <legend className="px-1 text-sm font-medium">{label}</legend>
+                <div className="flex gap-5 text-sm">
+                  <label className="flex items-center gap-2"><input type="radio" name={label} checked={valor === true} onChange={() => alterar(true)} /> Sim</label>
+                  <label className="flex items-center gap-2"><input type="radio" name={label} checked={valor === false} onChange={() => alterar(false)} /> Não</label>
+                </div>
+              </fieldset>
+            ))}
+            <label className="block text-sm font-medium">
+              Observações de avaria ou peças ausentes
+              <textarea className="input mt-1" rows={3} value={observacoesVistoria} onChange={(event) => setObservacoesVistoria(event.target.value)} placeholder="Descreva qualquer ressalva encontrada…" />
+            </label>
+            {erroVistoria && <p role="alert" className="alert-error text-sm">{erroVistoria}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setVistoriando(null)} disabled={processando !== null}>voltar</button>
+              <button type="submit" className="btn-primary" disabled={processando !== null}>
+                {processando !== null ? 'salvando…' : 'registrar vistoria'}
+              </button>
+            </div>
+          </form>
+        </Modal>
       )}
 
       {rejeitando && (
