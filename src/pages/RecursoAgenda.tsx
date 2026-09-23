@@ -185,6 +185,7 @@ export function RecursoAgenda() {
   const [carregandoAcessorios, setCarregandoAcessorios] = useState(false)
   const [erroAcessorios, setErroAcessorios] = useState<string | null>(null)
   const carregamentoAcessoriosId = useRef(0)
+  const carregamentoOcupacoesId = useRef(0)
   const [avisoLimiteUsuario, setAvisoLimiteUsuario] = useState<string | null>(null)
   const [horasSemanaUsuario, setHorasSemanaUsuario] = useState(0)
 
@@ -210,6 +211,7 @@ export function RecursoAgenda() {
 
   async function carregarOcupacoes() {
     if (!tipo || !id) return
+    const requestId = ++carregamentoOcupacoesId.current
 
     const inicioJanela = new Date(selectedDate)
     inicioJanela.setDate(inicioJanela.getDate() - 1)
@@ -241,7 +243,7 @@ export function RecursoAgenda() {
 
     const [reservasResult, bloqueiosResult] = await Promise.all([reservasPromise, bloqueiosQuery])
 
-    if (!reservasResult.error && !bloqueiosResult.error) {
+    if (requestId === carregamentoOcupacoesId.current && !reservasResult.error && !bloqueiosResult.error) {
       const reservasFormatadas: Ocupacao[] = ((reservasResult.data ?? []) as any[]).map((o) => ({
         inicio: o.inicio,
         fim: o.fim,
@@ -357,9 +359,21 @@ export function RecursoAgenda() {
   }, [role, meuIdUsuario, tipo])
 
   useEffect(() => {
-    carregarOcupacoes()
+    void carregarOcupacoes()
 
     if (!tipo || !id) return
+
+    const atualizarOcupacoes = () => {
+      void carregarOcupacoes()
+    }
+    const atualizarSeVisivel = () => {
+      if (document.visibilityState === 'visible') atualizarOcupacoes()
+    }
+
+    window.addEventListener('focus', atualizarOcupacoes)
+    document.addEventListener('visibilitychange', atualizarSeVisivel)
+    // Recupera alterações caso a conexão Realtime não entregue algum evento.
+    const intervalo = window.setInterval(atualizarSeVisivel, 30_000)
 
     const channel = supabase
       .channel(`agenda-realtime-${tipo}-${idNum}`)
@@ -370,9 +384,7 @@ export function RecursoAgenda() {
           schema: 'public',
           table: tabela,
         },
-        () => {
-          carregarOcupacoes()
-        }
+        atualizarOcupacoes
       )
       .on(
         'postgres_changes',
@@ -381,16 +393,20 @@ export function RecursoAgenda() {
           schema: 'public',
           table: 'bloqueios_manutencao',
         },
-        () => {
-          carregarOcupacoes()
-        }
+        atualizarOcupacoes
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') atualizarOcupacoes()
+      })
 
     return () => {
+      carregamentoOcupacoesId.current += 1
+      window.removeEventListener('focus', atualizarOcupacoes)
+      document.removeEventListener('visibilitychange', atualizarSeVisivel)
+      window.clearInterval(intervalo)
       supabase.removeChannel(channel)
     }
-  }, [tipo, id, selectedDate, tabela, idNum])
+  }, [tipo, id, selectedDate, tabela, idNum, meuIdUsuario])
 
   useEffect(() => {
     if (tipo === 'sala' && pendingSlot) {

@@ -47,6 +47,14 @@ Ele ativa:
 - **RPC `solicitar_reserva`** para solicitação transacional com locks em nível de linha.
 - **Sincronização Realtime** na tela de agendamento para atualização imediata dos horários ocupados.
 
+Para que aprovações, recusas e cancelamentos atualizem a grade em tempo real, aplique também:
+
+```text
+supabase/sql/realtime_reservas.sql
+```
+
+O script inclui as duas tabelas de reservas na publicação `supabase_realtime`. A grade também atualiza ao voltar para a página e periodicamente enquanto ela estiver visível.
+
 ### 🛠️ Interdições por período
 
 Para permitir que o responsável bloqueie uma sala ou equipamento em uma faixa de data/hora com justificativa pública, execute **depois** do script de prevenção de concorrência:

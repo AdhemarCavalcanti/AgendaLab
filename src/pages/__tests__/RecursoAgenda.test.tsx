@@ -88,6 +88,80 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
     localStorage.removeItem('agendalab_plano')
   })
 
+  it.each([
+    { tipo: 'sala', tabela: 'reservas_salas', recurso: 'salas', statusOcupado: 'em análise' },
+    { tipo: 'equipamento', tabela: 'reservas_equipamentos', recurso: 'equipamentos', statusOcupado: 'esgotado' },
+  ])('libera horário de $tipo após cancelamento administrativo', async ({ tipo, tabela, recurso, statusOcupado }) => {
+    setupAuth('aluno', 1)
+    localStorage.setItem('agendalab_plano', 'premium')
+    let statusReserva = 'pendente'
+    const inicio = new Date(2026, 8, 11, 15).toISOString()
+    const fim = new Date(2026, 8, 11, 16).toISOString()
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === recurso) {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: tipo === 'sala'
+              ? { id_sala: 5, nome: 'Sala 101', lotacao: 20, status: 'livre' }
+              : { id: 5, nome: 'Projetor', quantidade: 1, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === tabela) {
+        let statusConsultados: string[] = []
+        const query: any = {
+          select: vi.fn(() => query),
+          eq: vi.fn(() => query),
+          in: vi.fn((_coluna: string, statuses: string[]) => {
+            statusConsultados = statuses
+            return query
+          }),
+          lt: vi.fn(() => query),
+          gt: vi.fn(() => query),
+          then(resolve: (value: any) => any, reject?: (reason: any) => any) {
+            const data = statusConsultados.includes(statusReserva)
+              ? [{ inicio, fim, status: statusReserva, id_usuario: 2, quantidade: 1 }]
+              : []
+            return Promise.resolve({ data, error: null }).then(resolve, reject)
+          },
+        }
+        return query
+      }
+      return criarConsultaVazia()
+    })
+
+    render(
+      <MemoryRouter initialEntries={[`/recurso/${tipo}/5`]}>
+        <Routes><Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} /></Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText(statusOcupado)).toBeInTheDocument()
+    const slot = screen.getByText('15:00 – 16:00').closest('button')!
+    expect(slot).toBeDisabled()
+
+    statusReserva = 'cancelada'
+    if (tipo === 'sala') {
+      const channel = vi.mocked(supabase.channel).mock.results[0].value
+      const eventoReserva = channel.on.mock.calls.find(
+        ([evento, filtro]: [string, { table: string }]) => evento === 'postgres_changes' && filtro.table === tabela
+      )?.[2]
+      expect(eventoReserva).toBeDefined()
+      eventoReserva()
+    } else {
+      fireEvent.focus(window)
+    }
+
+    await waitFor(() => {
+      expect(screen.queryByText(statusOcupado)).not.toBeInTheDocument()
+      expect(slot).toBeEnabled()
+    })
+  })
+
   it('exibe mensagem e bloqueia agendamento quando recurso está em manutenção', async () => {
     setupAuth('aluno', 1)
 
