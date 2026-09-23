@@ -13,6 +13,7 @@ import { AdminGestaoUsuarios } from './pages/admin/GestaoUsuarios'
 import { AdminDashboard } from './pages/admin/Dashboard'
 import { Perfil } from './pages/Perfil'
 import { AdminPlanos } from './pages/admin/Planos'
+import { AdminAcompanhamentoRecursos } from './pages/admin/AcompanhamentoRecursos'
 
 export default function App() {
   return (
@@ -83,6 +84,18 @@ export default function App() {
                   </ProtectedRoute>
                 }
               />
+<<<<<<< Updated upstream
+=======
+              <Route path="/admin/planos" element={<AdminPlanos />} />
+              <Route
+                path="/admin/acompanhamento"
+                element={
+                  <ProtectedRoute allow={['admin']}>
+                    <AdminAcompanhamentoRecursos />
+                  </ProtectedRoute>
+                }
+              />
+>>>>>>> Stashed changes
             </Routes>
           </main>
           <footer className="border-t border-(--color-border)/80 py-7 text-center text-xs text-(--color-ink-soft)">
