@@ -279,7 +279,7 @@ export function RecursoAgenda() {
         .gt('quantidade', 0),
       supabase
         .from('reservas_equipamentos')
-        .select('id_equipamento, quantidade')
+        .select('id_equipamento, quantidade, inicio, fim')
         .in('status', ['pendente', 'aprovada'])
         .lt('inicio', fimISO)
         .gt('fim', inicioISO),
@@ -300,13 +300,44 @@ export function RecursoAgenda() {
       return
     }
 
-    const quantidadesEmUso = new Map<number, number>()
+    const inicioSlot = inicio.getTime()
+    const fimSlot = fim.getTime()
+
+    // Agrupa reservas por equipamento para calcular o pico de uso simultâneo
+    const reservasPorEquipamento = new Map<number, any[]>()
     for (const reserva of (reservasResult.data ?? []) as any[]) {
-      const idEquipamento = Number(reserva.id_equipamento)
-      quantidadesEmUso.set(
-        idEquipamento,
-        (quantidadesEmUso.get(idEquipamento) ?? 0) + Number(reserva.quantidade ?? 1)
-      )
+      const idEquip = Number(reserva.id_equipamento)
+      const lista = reservasPorEquipamento.get(idEquip) ?? []
+      lista.push(reserva)
+      reservasPorEquipamento.set(idEquip, lista)
+    }
+
+    // Calcula o pico de uso simultâneo para cada equipamento dentro de [inicioSlot, fimSlot)
+    const picoUsoPorEquipamento = new Map<number, number>()
+    for (const [idEquip, reservas] of reservasPorEquipamento.entries()) {
+      const pontos = new Set<number>([inicioSlot])
+      for (const r of reservas) {
+        if (r.inicio) {
+          const rInicio = new Date(r.inicio).getTime()
+          if (rInicio >= inicioSlot && rInicio < fimSlot) {
+            pontos.add(rInicio)
+          }
+        }
+      }
+
+      let maxUso = 0
+      for (const t of pontos) {
+        let usoNoPonto = 0
+        for (const r of reservas) {
+          const rInicio = r.inicio ? new Date(r.inicio).getTime() : inicioSlot
+          const rFim = r.fim ? new Date(r.fim).getTime() : fimSlot
+          if (rInicio <= t && rFim > t) {
+            usoNoPonto += Number(r.quantidade ?? 1)
+          }
+        }
+        if (usoNoPonto > maxUso) maxUso = usoNoPonto
+      }
+      picoUsoPorEquipamento.set(idEquip, maxUso)
     }
 
     const equipamentosBloqueados = new Set<number>(
@@ -321,7 +352,7 @@ export function RecursoAgenda() {
         ...equipamento,
         disponivel: equipamentosBloqueados.has(equipamento.id)
           ? 0
-          : Math.max(0, Number(equipamento.quantidade) - (quantidadesEmUso.get(equipamento.id) ?? 0)),
+          : Math.max(0, Number(equipamento.quantidade) - (picoUsoPorEquipamento.get(equipamento.id) ?? 0)),
       }))
       .filter((equipamento) => equipamento.disponivel > 0)
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))

@@ -876,4 +876,76 @@ describe('RecursoAgenda Page & Concurrency Prevention (US09 / RF04)', () => {
     const btnConfirmar = screen.getByRole('button', { name: /confirmar solicitação/i })
     expect(btnConfirmar).not.toBeDisabled()
   })
+
+  it('calcula a disponibilidade de acessórios pelo pico simultâneo em vez de somar reservas contíguas', async () => {
+    const user = userEvent.setup()
+    const hoje = new Date()
+    const ano = hoje.getFullYear()
+    const mes = String(hoje.getMonth() + 1).padStart(2, '0')
+    const dia = String(hoje.getDate()).padStart(2, '0')
+    const dataStr = `${ano}-${mes}-${dia}`
+
+    vi.mocked(supabase.from).mockImplementation((table: string) => {
+      if (table === 'salas') {
+        return {
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { id_sala: 4, nome: 'Laboratório de Física', lotacao: 20, status: 'livre' },
+            error: null,
+          }),
+        } as any
+      }
+      if (table === 'equipamentos') {
+        return criarConsultaComResultado([
+          { id: 10, nome: 'Projetor HD', quantidade: 2, status: 'livre' },
+        ])
+      }
+      if (table === 'reservas_equipamentos') {
+        return criarConsultaComResultado([
+          {
+            id_equipamento: 10,
+            quantidade: 1,
+            inicio: new Date(`${dataStr}T14:00:00`).toISOString(),
+            fim: new Date(`${dataStr}T15:00:00`).toISOString(),
+            status: 'aprovada',
+          },
+          {
+            id_equipamento: 10,
+            quantidade: 1,
+            inicio: new Date(`${dataStr}T15:00:00`).toISOString(),
+            fim: new Date(`${dataStr}T16:00:00`).toISOString(),
+            status: 'aprovada',
+          },
+        ])
+      }
+      return criarConsultaVazia()
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/recurso/sala/4']}>
+        <Routes>
+          <Route path="/recurso/:tipo/:id" element={<RecursoAgenda />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    expect(await screen.findByText('Laboratório de Física')).toBeInTheDocument()
+
+    // Seleciona slot das 14:00 às 15:00 e expande até 16:00
+    const slot14 = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('14:00 – 15:00')
+    )
+    await user.click(slot14!)
+    const slot15 = (await screen.findAllByRole('button')).find((btn) =>
+      btn.textContent?.includes('15:00 – 16:00')
+    )
+    await user.click(slot15!)
+
+    await user.click(screen.getByRole('button', { name: /solicitar reserva/i }))
+
+    expect(await screen.findByText('Projetor HD')).toBeInTheDocument()
+    // Como o pico simultâneo das reservas vizinhas é 1 e o total é 2, sobra 1 disponível
+    expect(screen.getByText(/1 disponível\(is\)/i)).toBeInTheDocument()
+  })
 })

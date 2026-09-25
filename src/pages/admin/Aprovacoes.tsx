@@ -228,7 +228,7 @@ export function AdminAprovacoes() {
       .eq('id', Number(item.id))
 
     setProcessando(null)
-    if (error) alert('Erro: ' + error.message)
+    if (error) alert(`Erro ao aprovar ${item.recursoNome}: ${error.message}`)
     else carregar()
   }
 
